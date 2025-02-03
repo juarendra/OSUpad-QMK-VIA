@@ -1,0 +1,23 @@
+{
+  "manufacturer": "positron_electronic",
+  "keyboard_name": "streampad_",
+  "url": "https://www.tokopedia.com/positronelectronic",
+  "maintainer": "juarendra",
+  "usb": {
+    "device_version": "1.0.0",
+    "pid": "0x6273",
+    "vid": "0x6B70"
+  },
+  "layouts": {
+    "LAYOUT": {
+      "layout": [
+        {"x":0, "y":0},
+        {"x":1, "y":0},
+        {"x":2, "y":0},
+        {"x":0, "y":1},
+        {"x":1, "y":1},
+        {"x":2, "y":1}
+      ]
+    }
+  }
+}
