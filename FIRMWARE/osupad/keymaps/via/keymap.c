@@ -33,18 +33,38 @@ enum layer_names {
 
 
 const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
+    /*
+        |                  |                    |  Knob : Vol Up/Dn |
+        |      Mail        |         Play       |    Press: Mute    |
+        |      Prev        |         Next       |  Cycle Layers     |
+     */
     [_MEDIA] = LAYOUT_via(
         KC_A, KC_B, KC_C,
         KC_E, KC_F, KC_G
     ),
+    /*
+        |                  |                     |  Knob : Desktops  |
+        |       Back       |   Fwd               |    Press: Stop    |
+        |     PrevTab      | NextTab             |   Cycle Layers    |
+     */
     [_BROWSER] = LAYOUT_via(
         KC_A, KC_A, KC_A,
         KC_A, KC_A, KC_A
     ),
+    /*
+        |               |                        |  Knob : Windows    |
+        | Slack Status  |    Zoom Toggle Mute    |     Enter          |
+        |  WinScrnSht   |        Task View       |  Cycle Layers      |
+     */
     [_MACRO] = LAYOUT_via(
         KC_A, KC_A, KC_A,
         KC_A, KC_A, KC_A
     ),
+    /*
+        |               |                        | Knob : Saturation Up/Dn |
+        | RGB MOD Cycle |   Right Shift          |     Toggle RGB          |
+        |    Hue Cycle  |   Increase Brightness  |  Cycle Layers           |
+     */
     [_RGBLIGHTS] = LAYOUT_via(
         KC_A, KC_A, KC_A, 
         KC_A, KC_A, KC_A
