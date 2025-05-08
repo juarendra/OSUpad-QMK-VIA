@@ -17,6 +17,7 @@
 
 //#define NO_ACTION_ONESHOT
 
+#define USB_POLLING_INTERVAL_MS 1
 
 /* key matrix size */
 #define MATRIX_ROWS 2
@@ -24,7 +25,7 @@
 
 /* Keyboard Matrix Assignments */
 #define DIRECT_PINS { \
-    { A7, A6, A5}, \
+    { B0, A7, A6}, \
     { B12, B13, B14} \
 }
 /* Debounce reduces chatter (unintended double-presses) - set 0 if debouncing is not needed */
@@ -38,7 +39,7 @@
 #define FORCE_NKRO
 
 /* ws2812 RGB LED */
-#define WS2812_DI_PIN A4 //D3 - underglow C7 - backlight
+#define WS2812_DI_PIN A5 //D3 - underglow C7 - backlight
 #define RGBLED_NUM 8    // Number of L
 
 #ifdef RGBLIGHT_ENABLE
