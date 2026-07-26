@@ -26,7 +26,9 @@ static const uint8_t RAW_REPORT_BYTES = 32;
 static const uint8_t key_pins[KEY_COUNT] = {PB0, PA7, PA6, PB12, PB13, PB14};
 
 USBHID HID;
-HIDKeyboard Keyboard(HID, 1);
+/* HID_KEYBOARD uses USBComposite's standard keyboard descriptor, whose
+ * keyboard report ID is 2. Keep the sender and descriptor aligned. */
+HIDKeyboard Keyboard(HID, HID_KEYBOARD_REPORT_ID);
 
 static bool stable_state[KEY_COUNT];
 static bool sampled_state[KEY_COUNT];
