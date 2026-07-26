@@ -1,0 +1,72 @@
+name: Build OSUpad Clone VIA firmware
+
+on:
+  push:
+    paths:
+      - 'FIRMWARE/OSUpadCloneVIA/**'
+      - 'tools/verify_osupad_clone_via.py'
+      - '.github/workflows/build-osupad-clone-via.yml'
+  pull_request:
+    paths:
+      - 'FIRMWARE/OSUpadCloneVIA/**'
+      - 'tools/verify_osupad_clone_via.py'
+      - '.github/workflows/build-osupad-clone-via.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+
+      - name: Set up Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Install pinned STM32F1 toolchain and USBComposite
+        shell: bash
+        run: |
+          set -euo pipefail
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls \
+            https://dan.drown.org/stm32duino/package_STM32duino_index.json
+          arduino-cli core update-index
+          arduino-cli core install stm32duino:STM32F1@2022.9.26
+          git clone --depth 1 --branch 1.0.8 \
+            https://github.com/arpruss/USBHID_stm32f1.git \
+            "$RUNNER_TEMP/arduino-libraries/USBComposite"
+
+      - name: Verify VIA and flash-layout contract
+        run: python3 tools/verify_osupad_clone_via.py
+
+      - name: Compile direct-ST-Link C6 firmware
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build
+          arduino-cli compile \
+            --fqbn stm32duino:STM32F1:genericSTM32F103C6:upload_method=STLinkMethod,cpu_speed=speed_72mhz,opt=osstd \
+            --libraries "$RUNNER_TEMP/arduino-libraries" \
+            --output-dir build \
+            FIRMWARE/OSUpadCloneVIA
+          test -f build/OSUpadCloneVIA.ino.bin
+          # The two final 1 KiB C6 pages are settings storage.  The binary
+          # must never occupy them, even if a clone advertises more flash.
+          test "$(stat -c%s build/OSUpadCloneVIA.ino.bin)" -le 30720
+          sha256sum build/OSUpadCloneVIA.ino.bin FIRMWARE/OSUpadCloneVIA/via-definition.json \
+            > build/SHA256SUMS.txt
+
+      - name: Upload flashable firmware and VIA definition
+        uses: actions/upload-artifact@v4
+        with:
+          name: osupad-clone-via-stlink
+          path: |
+            build/OSUpadCloneVIA.ino.bin
+            build/SHA256SUMS.txt
+            FIRMWARE/OSUpadCloneVIA/via-definition.json
+            FIRMWARE/OSUpadCloneVIA/FLASH_STLINK.md
+          if-no-files-found: error
