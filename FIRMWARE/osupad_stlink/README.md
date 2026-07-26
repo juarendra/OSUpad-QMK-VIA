@@ -18,6 +18,12 @@ Copy this `osupad_stlink` directory to `qmk_firmware/keyboards/`, then build:
 qmk compile -kb osupad_stlink -km via
 ```
 
+For the observed F103-compatible clone, add
+`-e 'EXTRAFLAGS=-DCRT0_CONTROL_INIT=0'`. This starts QMK on the Cortex-M main
+stack (MSP) and avoids the immediate HardFault seen with QMK's usual process
+stack (PSP). The GitHub Actions `osupad-stlink-firmware` artifact already uses
+this setting.
+
 Do not use `FIRMWARE/osupad_via.bin` from the repository for this target: that
 binary is linked for the STM32duino bootloader and starts at `0x08002000`.
 
