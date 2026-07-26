@@ -180,39 +180,61 @@ static void copy_buffer_to_keymap(uint16_t offset, uint8_t size, const uint8_t *
   for (uint8_t i = 0; i < size; ++i) if (offset + i < bytes) target[offset + i] = in[i];
 }
 
-static void via_reply_lighting(uint8_t *data) {
-  switch (data[1]) {
-    case 0x80: data[2] = rgb.brightness; break;
-    case 0x81: data[2] = rgb.effect; break;
-    case 0x82: data[2] = rgb.speed; break;
-    case 0x83: data[2] = rgb.hue; data[3] = rgb.saturation; break;
-    default: data[0] = 0xFF; break;
-  }
-}
-
-static void via_set_lighting(const uint8_t *data) {
-  switch (data[1]) {
-    case 0x80: rgb.brightness = data[2]; break;
-    case 0x81: rgb.effect = data[2]; break;
-    case 0x82: rgb.speed = data[2]; break;
-    case 0x83: rgb.hue = data[2]; rgb.saturation = data[3]; break;
+/* VIA protocol v13 uses the QMK custom-value command layout:
+ * [command, channel, value, value-data...].  Channel 2 is qmk_rgblight.
+ * This matches the V3 definition's `qmk_rgblight` menu. */
+static bool via_set_rgblight(const uint8_t *data) {
+  if (data[1] != 0x02) return false;
+  switch (data[2]) {
+    case 0x01: rgb.brightness = data[3]; break;
+    case 0x02: rgb.effect = data[3]; break;
+    case 0x03: rgb.speed = data[3]; break;
+    case 0x04: rgb.hue = data[3]; rgb.saturation = data[4]; break;
+    default: return false;
   }
   rgb_render();
+  return true;
 }
 
-/* VIA protocol v9 command subset. It intentionally returns the same 32-byte
- * packet supplied by VIA, exactly as QMK raw_hid_receive() does. */
+static bool via_get_rgblight(uint8_t *data) {
+  if (data[1] != 0x02) return false;
+  switch (data[2]) {
+    case 0x01: data[3] = rgb.brightness; break;
+    case 0x02: data[3] = rgb.effect; break;
+    case 0x03: data[3] = rgb.speed; break;
+    case 0x04: data[3] = rgb.hue; data[4] = rgb.saturation; break;
+    default: return false;
+  }
+  return true;
+}
+
+/* VIA protocol v13 command subset. It returns the same 32-byte packet given
+ * by the host, as QMK's raw_hid_receive() does. */
 static void handle_via(uint8_t *data) {
   switch (data[0]) {
-    case 0x01: data[1] = 0x00; data[2] = 0x09; break; // protocol version
+    case 0x01: data[1] = 0x00; data[2] = 0x0D; break; // protocol v13 / VIA V3
     case 0x02: // keyboard value
       if (data[1] == 0x01) {
         const uint32_t up = millis();
         data[2] = up >> 24; data[3] = up >> 16; data[4] = up >> 8; data[5] = up;
+      } else if (data[1] == 0x02) { // layout options: none on this fixed layout
+        data[2] = data[3] = data[4] = data[5] = 0;
       } else if (data[1] == 0x03) {
-        data[2] = (stable_state[0] ? 1 : 0) | (stable_state[1] ? 2 : 0) | (stable_state[2] ? 4 : 0);
-        data[3] = (stable_state[3] ? 1 : 0) | (stable_state[4] ? 2 : 0) | (stable_state[5] ? 4 : 0);
-      }
+        const uint8_t row_offset = data[2];
+        if (row_offset < 2) data[3] = (stable_state[row_offset * 3] ? 1 : 0) |
+                                      (stable_state[row_offset * 3 + 1] ? 2 : 0) |
+                                      (stable_state[row_offset * 3 + 2] ? 4 : 0);
+        if (row_offset + 1 < 2) data[4] = (stable_state[(row_offset + 1) * 3] ? 1 : 0) |
+                                          (stable_state[(row_offset + 1) * 3 + 1] ? 2 : 0) |
+                                          (stable_state[(row_offset + 1) * 3 + 2] ? 4 : 0);
+      } else if (data[1] == 0x04) { // firmware version, matching the V3 definition
+        data[2] = data[3] = data[4] = 0; data[5] = 1;
+      } else if (data[1] == 0x06) { // QMK keycodes version; zero means standard set
+        data[2] = data[3] = data[4] = data[5] = 0;
+      } else data[0] = 0xFF;
+      break;
+    case 0x03: // set keyboard value
+      if (data[1] != 0x02 && data[1] != 0x05) data[0] = 0xFF;
       break;
     case 0x04: { // get keycode: layer, row, column
       const uint8_t layer = data[1], row = data[2], column = data[3];
@@ -228,9 +250,10 @@ static void handle_via(uint8_t *data) {
       break;
     }
     case 0x06: keymap_reset(); break;
-    case 0x07: via_set_lighting(data); break;
-    case 0x08: via_reply_lighting(data); break;
-    case 0x09: break; // RAM state is already current; persistent storage is a later opt-in step.
+    case 0x07: if (!via_set_rgblight(data)) data[0] = 0xFF; break;
+    case 0x08: if (!via_get_rgblight(data)) data[0] = 0xFF; break;
+    case 0x09: if (data[1] != 0x02) data[0] = 0xFF; break; // RAM-backed save
+    case 0x0A: keymap_reset(); macro_reset(); break;
     case 0x0C: data[1] = MACRO_COUNT; break;
     case 0x0D: data[1] = MACRO_BYTES >> 8; data[2] = MACRO_BYTES; break;
     case 0x0E: {

@@ -6,10 +6,10 @@ interface for VIA Web. The dedicated interface has QMK's expected usage page
 `0xFF60`, usage `0x61`, and no report ID.
 
 It provides four editable layers, 16 text macros, and eight WS2812 LEDs on
-PA5. The firmware reports VIA protocol v9, so use `via-definition.json` as a
-VIA V2 draft definition: enable **Use V2 definitions (deprecated)** in VIA's
-**Design** tab before loading it. Automatic listing requires a separate
-upstream VIA registry submission.
+PA5. The firmware reports VIA protocol v13 and `via-definition.json` is a VIA
+V3 draft definition. Keep **Use V2 definitions (deprecated)** disabled in
+VIA's **Design** tab. Automatic listing requires a separate upstream VIA
+registry submission.
 
 The first build is intentionally RAM-backed. VIA changes work immediately but
 are reset after power loss. Flash-backed storage is kept as a separate follow-

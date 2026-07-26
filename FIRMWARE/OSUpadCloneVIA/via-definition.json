@@ -1,12 +1,14 @@
 {
-  "name": "OSUpad Clone VIA (VIA protocol v9)",
+  "name": "OSUpad Clone VIA",
   "vendorId": "0x7877",
   "productId": "0x1004",
-  "lighting": "qmk_rgblight",
+  "firmwareVersion": 1,
   "matrix": {
     "rows": 2,
     "cols": 3
   },
+  "keycodes": ["qmk_lighting"],
+  "menus": ["qmk_rgblight"],
   "layouts": {
     "keymap": [
       ["0,0", "0,1", "0,2"],
