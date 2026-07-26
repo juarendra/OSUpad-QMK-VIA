@@ -1,0 +1,26 @@
+# OSUpad ST-Link firmware
+
+This is the OSUpad QMK firmware variant for direct SWD programming with an
+ST-Link. It deliberately has no USB bootloader configured, so the QMK
+application is linked to flash address `0x08000000`.
+
+## Build
+
+Copy this `osupad_stlink` directory to `qmk_firmware/keyboards/`, then build:
+
+```sh
+qmk compile -kb osupad_stlink -km via
+```
+
+Do not use `FIRMWARE/osupad_via.bin` from the repository for this target: that
+binary is linked for the STM32duino bootloader and starts at `0x08002000`.
+
+## Flash with STM32 ST-LINK Utility
+
+1. Connect SWDIO, SWCLK, GND, and 3.3 V from the ST-Link.
+2. Open the binary built for `osupad_stlink`.
+3. Program it at address `0x08000000`.
+4. Reset the MCU.
+
+There is intentionally no USB bootloader in this variant. Every future update
+must be flashed through ST-Link (or the STM32F103 ROM UART bootloader).

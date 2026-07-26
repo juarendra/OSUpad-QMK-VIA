@@ -1,0 +1,42 @@
+name: Build OSUpad ST-Link firmware
+
+on:
+  push:
+    paths:
+      - 'FIRMWARE/osupad_stlink/**'
+      - '.github/workflows/build-osupad-stlink.yml'
+  pull_request:
+    paths:
+      - 'FIRMWARE/osupad_stlink/**'
+      - '.github/workflows/build-osupad-stlink.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: ghcr.io/qmk/qmk_cli
+
+    steps:
+      - name: Check out OSUpad sources
+        uses: actions/checkout@v4
+
+      - name: Check out QMK Firmware
+        run: git clone --depth 1 --recurse-submodules https://github.com/qmk/qmk_firmware.git /tmp/qmk_firmware
+
+      - name: Build ST-Link firmware
+        working-directory: /tmp/qmk_firmware
+        run: |
+          cp -a "$GITHUB_WORKSPACE/FIRMWARE/osupad_stlink" keyboards/osupad_stlink
+          qmk compile -kb osupad_stlink -km via
+          mkdir -p "$GITHUB_WORKSPACE/artifacts"
+          find .build -maxdepth 1 -type f -name 'osupad_stlink_via.*' -exec cp {} "$GITHUB_WORKSPACE/artifacts/" \;
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: osupad-stlink-firmware
+          path: artifacts/osupad_stlink_via.bin
+          if-no-files-found: error
