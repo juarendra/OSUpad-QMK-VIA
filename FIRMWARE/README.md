@@ -1,11 +1,27 @@
 # Firmware OSUpad
 
-`OSUpadCloneVIA` adalah satu-satunya firmware yang didukung untuk produk
-OSUpad dengan STM32F103 clone. Gunakan binary rilisnya bersama ST-Link.
+## Firmware rilis: OSUpadCloneVIA
 
-Folder `osupad` dan binary `osupad_via.bin` dipertahankan hanya sebagai
-referensi firmware QMK untuk MCU STM32 asli. Binary tersebut tidak diuji dan
-tidak direkomendasikan untuk clone yang memerlukan firmware Arduino ini.
+[`OSUpadCloneVIA`](OSUpadCloneVIA) adalah satu-satunya firmware yang didukung
+untuk OSUpad dengan STM32F103 clone. Unduh binary dan JSON VIA dari
+[Releases](https://github.com/juarendra/OSUpad-QMK-VIA/releases/latest), lalu
+flash menggunakan ST-Link pada alamat `0x08000000`.
 
-Seluruh folder probe dan eksperimen QMK lama sengaja tidak ada di branch rilis
-agar pengguna tidak salah memilih firmware.
+| Berkas | Fungsi |
+| --- | --- |
+| `OSUpadCloneVIA.ino.bin` | Firmware rilis untuk clone; tersedia sebagai asset GitHub Release. |
+| `via-definition.json` | Definisi VIA V3; muat dari tab Design. |
+| `FLASH_STLINK.md` | Flash, update, dan recovery tanpa mengubah BOOT/RDP. |
+| `RELEASE_QA.md` | Validasi teknis dan checklist produksi. |
+
+Lihat [panduan pengguna](../DOC/PANDUAN_OSUPAD.md) untuk setup VIA, macro, RGB,
+dan contoh keycode.
+
+## Referensi QMK STM32 asli
+
+Folder `osupad` dan binary `osupad_via.bin` dipertahankan semata-mata sebagai
+referensi QMK untuk MCU STM32 asli. Jangan gunakan binary itu pada clone yang
+bermasalah dengan USB QMK/ChibiOS; gunakan `OSUpadCloneVIA`.
+
+Folder probe USB, eksperimen ST-Link QMK, dan firmware HID awal sengaja tidak
+ada di branch rilis agar pengguna tidak salah memilih firmware.

@@ -1,51 +1,47 @@
-# Flash through ST-Link (direct application image)
+# Flash melalui ST-Link
 
-This firmware is a direct-SWD image: program its `.bin` at `0x08000000`.
-It is **not** an STM32duino bootloader image and does not require changing
-BOOT0 or BOOT1. Keep BOOT0 tied low for normal startup.
+Firmware ini adalah image SWD langsung: program file `.bin` pada alamat
+`0x08000000`. Ini **bukan** image STM32duino bootloader; BOOT0 dan BOOT1 tidak
+perlu diubah. Untuk pemakaian normal, BOOT0 tetap terhubung ke GND.
 
-## Before flashing
+## Sebelum flash
 
-1. Disconnect the USB cable from the macropad. Power it only from the ST-Link
-   while programming; avoid powering it from both supplies unless the board is
-   designed for that.
-2. Connect ST-Link `SWDIO`, `SWCLK`, and `GND`; connect 3.3 V only when your
-   ST-Link is intended to power the target. `NRST` is optional for normal
-   programming.
-3. In STM32 ST-LINK Utility, confirm the target is detected by SWD. Do not
-   alter option bytes, Read Out Protection, or BOOT jumpers for this procedure.
+1. Lepas kabel USB dari macropad. Hindari memberi daya dari USB dan ST-Link
+   sekaligus kecuali rangkaian board memang mendukungnya.
+2. Hubungkan ST-Link `SWDIO`, `SWCLK`, dan `GND`. Hubungkan `3.3V` hanya bila
+   ST-Link memang dipakai untuk memberi daya ke target. `NRST` opsional.
+3. Pastikan STM32 ST-LINK Utility mendeteksi target melalui SWD. Jangan ubah
+   Option Bytes, Read Out Protection, ataupun jumper BOOT.
 
-## Program and verify
+## Program dan verifikasi
 
-Open the `osupad-clone-via-stlink` GitHub Actions artifact, then use
-`OSUpadCloneVIA.ino.bin`.
+Unduh `OSUpadCloneVIA.ino.bin` dari
+[GitHub Releases](https://github.com/juarendra/OSUpad-QMK-VIA/releases/latest).
 
-- In ST-LINK Utility: **File → Open file**, select the binary, enter start
-  address `0x08000000`, then choose **Target → Program & Verify**.
-- Or with ST-LINK CLI:
+- Di ST-LINK Utility: **File → Open file**, pilih binary, isi alamat awal
+  `0x08000000`, kemudian pilih **Target → Program & Verify**.
+- Atau dengan ST-LINK CLI:
 
   ```text
   ST-LINK_CLI.exe -c SWD -P OSUpadCloneVIA.ino.bin 0x08000000 -V after_programming -Rst -Run
   ```
 
-The release build is constrained to the first 30 KiB. The firmware binary never
-uses the last two 1 KiB pages (`0x08007800` and `0x08007C00`), which store VIA
-settings. For an update where those settings matter, select an erase mode that
-erases only the required pages; **Mass Erase** deliberately clears the entire
-flash, including the saved keymap, macros, and RGB configuration.
+Build rilis hanya memakai 30 KiB pertama. Dua halaman 1 KiB terakhir
+(`0x08007800` dan `0x08007C00`) menyimpan setting VIA. Saat update, gunakan
+erase halaman yang diperlukan bila ingin mempertahankan setting. **Mass Erase**
+sengaja menghapus seluruh flash, termasuk keymap, macro, dan RGB tersimpan.
 
-## First USB and VIA test
+## Uji USB dan VIA pertama
 
-1. Disconnect ST-Link, connect the macropad directly to a data-capable USB
-   port, and wait for Windows to enumerate it as OSUpad Clone VIA.
-2. In VIA Web, open **Design**, load `via-definition.json`, leave **Use V2
-   definitions** disabled, then authorize the device.
-3. Remap one key and edit a macro. Wait at least one second before removing
-   USB power; reconnect and verify both changes remain.
+1. Lepas ST-Link dan hubungkan USB data langsung ke komputer.
+2. Di VIA Web, buka **Design**, muat `via-definition.json`, pastikan **Use V2
+   definitions** nonaktif, kemudian authorize perangkat.
+3. Remap satu tombol dan buat macro. Tunggu sedikitnya satu detik, cabut USB,
+   sambungkan lagi, dan pastikan keduanya tetap tersimpan.
 
 ## Recovery
 
-If USB does not enumerate, reconnect ST-Link and repeat the same direct flash.
-The recovery path does not depend on the USB bootloader. If ST-Link reports
-read-out protection, stop there: clearing RDP mass-erases the MCU and should
-only be done deliberately after making a backup of any recoverable firmware.
+Jika USB tidak terdeteksi, hubungkan kembali ST-Link dan flash ulang binary
+yang sama. Recovery tidak memerlukan bootloader USB. Bila ST-Link melaporkan
+Read Out Protection, berhenti terlebih dahulu: menonaktifkan RDP melakukan
+mass erase dan hanya boleh dilakukan dengan sengaja.
