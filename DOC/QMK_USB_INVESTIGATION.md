@@ -19,9 +19,13 @@ from `0x20000400` to `0x20001800`; Windows produced the identical descriptor
 request failure. Stack size is therefore not the root cause.
 
 A clone-safe attempt that changed ChibiOS from bulk-clearing USB status flags
-to libmaple-style individual clearing also produced the identical error. The
-next comparison is the older QMK 0.16.9 ChibiOS USBv1 driver, which predates a
-reported STM32 USB enumeration regression.
+to libmaple-style individual clearing also produced the identical error.
+
+QMK 0.16.9 was also built from its original source with a legacy-compatible
+configuration and flashed at `0x08000000`. ST-Link verified the 16,504-byte
+image, but Windows still reported `USB\\VID_0000&PID_0002` / *Device Descriptor
+Request Failed*. This rules out a USB regression limited to newer QMK releases:
+the old and current ChibiOS USBv1 paths both fail on this chip.
 
 ## Conclusion
 
@@ -29,7 +33,10 @@ The fault is below QMK's keyboard/VIA configuration layer: it is a
 compatibility issue between this clone's USB implementation and the ChibiOS
 STM32F1 USBv1 driver or its low-level initialization sequence. Fixing QMK
 requires a maintained patch/port of that USB driver, then re-testing basic HID
-before enabling VIA.
+before enabling VIA. The likely reference implementation is STM32duino's
+working libmaple USB stack; porting it requires replacing or adapting QMK's
+endpoint-0, PMA, interrupt, and reset handling, not merely changing a compile
+option.
 
 The working STM32duino HID firmware is retained as the safe recovery path. No
 option bytes, boot straps, or read-out protection were modified by this
