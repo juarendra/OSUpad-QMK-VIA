@@ -18,6 +18,11 @@ instead of QMK's standard 1 KiB exception stack. Its initial vector changed
 from `0x20000400` to `0x20001800`; Windows produced the identical descriptor
 request failure. Stack size is therefore not the root cause.
 
+A clone-safe attempt that changed ChibiOS from bulk-clearing USB status flags
+to libmaple-style individual clearing also produced the identical error. The
+next comparison is the older QMK 0.16.9 ChibiOS USBv1 driver, which predates a
+reported STM32 USB enumeration regression.
+
 ## Conclusion
 
 The fault is below QMK's keyboard/VIA configuration layer: it is a

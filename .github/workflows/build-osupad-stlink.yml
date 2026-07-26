@@ -125,15 +125,39 @@ jobs:
 
       - name: Build direct STM32F103C6 USB-HID probe
         run: |
-          patch --batch -d /qmk_firmware -p1 < \
-            "$GITHUB_WORKSPACE/FIRMWARE/osupad_c6_stlink_probe/patches/chibios-usbv1-istr-clone.patch"
           cp -r FIRMWARE/osupad_c6_stlink_probe /qmk_firmware/keyboards/osupad_c6_stlink_probe
-          qmk compile -kb osupad_c6_stlink_probe -km default -e 'EXTRAFLAGS=-DCRT0_CONTROL_INIT=0 -DOSUPAD_CLONE_USB_ISTR_WORKAROUND'
+          qmk compile -kb osupad_c6_stlink_probe -km default -e 'EXTRAFLAGS=-DCRT0_CONTROL_INIT=0'
 
       - name: Upload direct STM32F103C6 USB-HID probe
         uses: actions/upload-artifact@v4
         with:
           name: osupad-c6-stlink-usb-hid-probe
+          path: /qmk_firmware/osupad_c6_stlink_probe_default.bin
+          if-no-files-found: error
+
+  c6-legacy-qmk-usb-hid-probe:
+    # QMK 0.16.9 predates a reported STM32 USB enumeration regression. This
+    # job tests its ChibiOS USBv1 driver against the same minimal direct-SWD
+    # firmware before attempting a custom driver port.
+    runs-on: ubuntu-latest
+    container: ghcr.io/qmk/qmk_cli:latest
+
+    steps:
+      - name: Check out OSUpad sources
+        uses: actions/checkout@v4
+
+      - name: Set up QMK Firmware 0.16.9
+        run: qmk setup -y -H /qmk_firmware qmk/qmk_firmware 0.16.9
+
+      - name: Build legacy STM32F103C6 USB-HID probe
+        run: |
+          cp -r FIRMWARE/osupad_c6_stlink_probe /qmk_firmware/keyboards/osupad_c6_stlink_probe
+          qmk compile -kb osupad_c6_stlink_probe -km default -e 'EXTRAFLAGS=-DCRT0_CONTROL_INIT=0'
+
+      - name: Upload legacy STM32F103C6 USB-HID probe
+        uses: actions/upload-artifact@v4
+        with:
+          name: osupad-c6-legacy-qmk-usb-hid-probe
           path: /qmk_firmware/osupad_c6_stlink_probe_default.bin
           if-no-files-found: error
 
