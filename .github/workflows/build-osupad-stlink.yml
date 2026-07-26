@@ -156,7 +156,10 @@ jobs:
           cp -r FIRMWARE/osupad_c6_stlink_probe /qmk_firmware_0169/keyboards/osupad_c6_stlink_probe
           qmk config user.qmk_home=/qmk_firmware_0169
           cd /qmk_firmware_0169
-          make osupad_c6_stlink_probe:default EXTRAFLAGS=-DCRT0_CONTROL_INIT=0
+          # QMK 0.16.9 predates the current CLI's `hello` command. The
+          # Makefile only uses it as an environment preflight, so bypass it
+          # while retaining the compiler/toolchain supplied by the container.
+          make osupad_c6_stlink_probe:default EXTRAFLAGS=-DCRT0_CONTROL_INIT=0 QMK_BIN=/bin/true
 
       - name: Upload legacy STM32F103C6 USB-HID probe
         uses: actions/upload-artifact@v4
