@@ -125,8 +125,10 @@ jobs:
 
       - name: Build direct STM32F103C6 USB-HID probe
         run: |
+          patch --batch -d /qmk_firmware -p1 < \
+            "$GITHUB_WORKSPACE/FIRMWARE/osupad_c6_stlink_probe/patches/chibios-usbv1-istr-clone.patch"
           cp -r FIRMWARE/osupad_c6_stlink_probe /qmk_firmware/keyboards/osupad_c6_stlink_probe
-          qmk compile -kb osupad_c6_stlink_probe -km default -e 'EXTRAFLAGS=-DCRT0_CONTROL_INIT=0'
+          qmk compile -kb osupad_c6_stlink_probe -km default -e 'EXTRAFLAGS=-DCRT0_CONTROL_INIT=0 -DOSUPAD_CLONE_USB_ISTR_WORKAROUND'
 
       - name: Upload direct STM32F103C6 USB-HID probe
         uses: actions/upload-artifact@v4
