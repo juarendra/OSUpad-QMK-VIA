@@ -30,7 +30,7 @@ jobs:
         working-directory: /tmp/qmk_firmware
         run: |
           cp -a "$GITHUB_WORKSPACE/FIRMWARE/osupad_stlink" keyboards/osupad_stlink
-          qmk compile -kb osupad_stlink -km via
+          make osupad_stlink:via
           mkdir -p "$GITHUB_WORKSPACE/artifacts"
           find .build -maxdepth 1 -type f -name 'osupad_stlink_via.*' -exec cp {} "$GITHUB_WORKSPACE/artifacts/" \;
 
