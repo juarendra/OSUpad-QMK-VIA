@@ -5,6 +5,7 @@
     "url": "https://www.tokopedia.com/positronelectronic",
     "processor": "STM32F103",
     "bootloader": "stm32-dfu",
+    "board": "STM32F103C8_MINIMAL",
     "bootloader_instructions": "Flash through ST-Link/SWD at address 0x08000000.",
     "build": {
         "lto": true
@@ -19,6 +20,11 @@
         "mousekey": true,
         "nkro": true,
         "rgblight": true
+    },
+    "host": {
+        "default": {
+            "nkro": true
+        }
     },
     "matrix_pins": {
         "direct": [
