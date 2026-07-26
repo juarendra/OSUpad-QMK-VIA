@@ -33,3 +33,27 @@ jobs:
           name: osupad-stlink-firmware
           path: /qmk_firmware/osupad_stlink_via.bin
           if-no-files-found: error
+
+  clone-diagnostic:
+    runs-on: ubuntu-latest
+    container: ghcr.io/qmk/qmk_cli:latest
+
+    steps:
+      - name: Check out OSUpad sources
+        uses: actions/checkout@v4
+
+      - name: Set up QMK Firmware
+        run: qmk setup -y -H /qmk_firmware qmk/qmk_firmware
+
+      - name: Build conservative clone diagnostic
+        run: |
+          cp -r FIRMWARE/osupad_stlink /qmk_firmware/keyboards/osupad_stlink_clone
+          qmk compile -kb osupad_stlink_clone -km via -e LTO_ENABLE=no -e NKRO_ENABLE=no
+          cp /qmk_firmware/osupad_stlink_clone_via.bin /qmk_firmware/osupad_stlink_clone_diagnostic.bin
+
+      - name: Upload clone diagnostic artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: osupad-stlink-clone-diagnostic
+          path: /qmk_firmware/osupad_stlink_clone_diagnostic.bin
+          if-no-files-found: error

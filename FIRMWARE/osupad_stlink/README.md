@@ -25,3 +25,9 @@ binary is linked for the STM32duino bootloader and starts at `0x08002000`.
 
 There is intentionally no USB bootloader in this variant. Every future update
 must be flashed through ST-Link (or the STM32F103 ROM UART bootloader).
+
+## Clone diagnostic
+
+The workflow also produces `osupad-stlink-clone-diagnostic`, a conservative
+build with LTO and NKRO disabled. It is the first USB compatibility test for
+F103-compatible clones; it is flashed at the same `0x08000000` address.
