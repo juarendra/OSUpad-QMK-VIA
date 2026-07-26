@@ -154,6 +154,11 @@ jobs:
       - name: Build legacy STM32F103C6 USB-HID probe
         run: |
           cp -r FIRMWARE/osupad_c6_stlink_probe /qmk_firmware_0169/keyboards/osupad_c6_stlink_probe
+          # 0.16.9 has no `custom` bootloader metadata. This only satisfies
+          # its build validation; the local direct linker script still starts
+          # the image at 0x08000000 and the board code does not request a
+          # STM32duino bootloader.
+          echo 'BOOTLOADER = stm32duino' >> /qmk_firmware_0169/keyboards/osupad_c6_stlink_probe/rules.mk
           qmk config user.qmk_home=/qmk_firmware_0169
           cd /qmk_firmware_0169
           # QMK 0.16.9 predates the current CLI's `hello` command. The
