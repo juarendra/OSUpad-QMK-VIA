@@ -163,6 +163,15 @@ jobs:
           rm /qmk_firmware_0169/keyboards/osupad_c6_stlink_probe/keyboard.json
           cp /qmk_firmware_0169/keyboards/osupad_c6_stlink_probe/config_legacy.h \
             /qmk_firmware_0169/keyboards/osupad_c6_stlink_probe/config.h
+          # The legacy build system always injects its data-driven headers.
+          # This probe deliberately uses only config.h because its modern
+          # keyboard.json schema does not exist in QMK 0.16.9.  Pre-create
+          # harmless empty generated headers so make does not call the old
+          # generator with that missing schema.
+          mkdir -p /qmk_firmware_0169/.build/obj_osupad_c6_stlink_probe/src
+          touch /qmk_firmware_0169/.build/obj_osupad_c6_stlink_probe/src/info_config.h \
+            /qmk_firmware_0169/.build/obj_osupad_c6_stlink_probe/src/default_keyboard.h \
+            /qmk_firmware_0169/.build/obj_osupad_c6_stlink_probe/src/layouts.h
           qmk config user.qmk_home=/qmk_firmware_0169
           cd /qmk_firmware_0169
           # QMK 0.16.9 predates the current CLI's `hello` command. The
