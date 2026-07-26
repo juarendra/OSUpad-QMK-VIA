@@ -56,9 +56,18 @@ def main() -> None:
         "SETTINGS_PAGE_A = 0x08007800UL",
         "SETTINGS_PAGE_B = 0x08007C00UL",
         "static_assert(sizeof(PersistentImage) <= SETTINGS_PAGE_BYTES",
-        "HID_MOUSE_REPORT_DESCRIPTOR()",
+        "0x29, 0x08",  # Mouse report exposes all eight QMK mouse buttons.
+        "0x0A, 0x38, 0x02",  # Consumer AC Pan for horizontal scroll.
         "HID_CONSUMER_REPORT_DESCRIPTOR()",
         "HID_KEYBOARD_REPORT_DESCRIPTOR()",
+        "HIDReporter SystemControl",
+        "MOUSEKEY_INTERVAL_MS = 20",
+        "usage >= 0xD1 && usage <= 0xD8",
+        "MOUSE_WHEEL_LEFT",
+        "MOUSE_WHEEL_RIGHT",
+        "usage == 0xA5) bit = 1",  # KC_PWR
+        "case 0x7833: rgb.effect = 35",  # QMK RGB test mode
+        "case 0x7834: rgb.effect = 37",  # QMK twinkle mode
         "case 0x0D: data[1] = MACRO_BYTES >> 8; data[2] = MACRO_BYTES",
         "case 0x0E: {",
         "case 0x0F: {",
@@ -78,6 +87,7 @@ def main() -> None:
     print("  VIA: 0x7877:0x1004, V3 definition, 2x3 matrix")
     print("  storage: application ends before 0x08007800; two 1 KiB settings pages")
     print("  Raw HID: vendor page 0xFF60, usage 0x61, 32-byte packets")
+    print("  input: 8-button mouse, vertical/horizontal scroll, system controls")
 
 
 if __name__ == "__main__":

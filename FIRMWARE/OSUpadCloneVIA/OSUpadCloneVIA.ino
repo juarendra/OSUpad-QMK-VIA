@@ -28,6 +28,7 @@ static const uint32_t SETTINGS_SAVE_DELAY_MS = 750;
 static const uint32_t SETTINGS_RETRY_DELAY_MS = 1000;
 static const uint8_t MACRO_TAP_DELAY_MS = 5;
 static const uint16_t TAPPING_TERM_MS = 175;
+static const uint8_t MOUSEKEY_INTERVAL_MS = 20;
 
 /* QMK send-string bytecode. VIA stores dynamic macros in exactly this
  * NUL-separated byte stream.  The values match QMK's
@@ -45,20 +46,39 @@ static const uint32_t SETTINGS_PAGE_A = 0x08007800UL;
 static const uint32_t SETTINGS_PAGE_B = 0x08007C00UL;
 static const uint16_t SETTINGS_PAGE_BYTES = 1024;
 static const uint32_t SETTINGS_MAGIC = 0x4F535650UL;  // "OSVP"
-static const uint16_t SETTINGS_VERSION = 1;
+static const uint16_t SETTINGS_VERSION = 2;
+static const uint16_t SETTINGS_V1_VERSION = 1;
 
 static const uint8_t key_pins[KEY_COUNT] = {PB0, PA7, PA6, PB12, PB13, PB14};
 
 USBHID HID;
-/* A single HID interface carries keyboard, mouse, and consumer reports while
- * VIA Raw HID remains its own vendor-defined interface. */
+/* A single HID interface carries keyboard, 8-button mouse (including
+ * horizontal wheel), consumer, and system-control reports. VIA Raw HID
+ * remains its own vendor-defined interface. */
 static const uint8_t keyboard_report_descriptor[] = {
-    HID_MOUSE_REPORT_DESCRIPTOR(),
+    /* Report ID 1: 8 mouse buttons, X/Y, vertical wheel, AC Pan. */
+    0x05, 0x01, 0x09, 0x02, 0xA1, 0x01, 0x85, HID_MOUSE_REPORT_ID,
+    0x09, 0x01, 0xA1, 0x00,
+    0x05, 0x09, 0x19, 0x01, 0x29, 0x08, 0x15, 0x00, 0x25, 0x01,
+    0x95, 0x08, 0x75, 0x01, 0x81, 0x02,
+    0x05, 0x01, 0x09, 0x30, 0x09, 0x31, 0x09, 0x38,
+    0x15, 0x81, 0x25, 0x7F, 0x75, 0x08, 0x95, 0x03, 0x81, 0x06,
+    0x05, 0x0C, 0x0A, 0x38, 0x02, 0x15, 0x81, 0x25, 0x7F,
+    0x75, 0x08, 0x95, 0x01, 0x81, 0x06,
+    0xC0, 0xC0,
     HID_CONSUMER_REPORT_DESCRIPTOR(),
     HID_KEYBOARD_REPORT_DESCRIPTOR(),
+    /* Report ID 4: System Power Down, Sleep, and Wake Up. */
+    0x05, 0x01, 0x09, 0x80, 0xA1, 0x01, 0x85, 0x04,
+    0x19, 0x81, 0x29, 0x83, 0x15, 0x00, 0x25, 0x01,
+    0x75, 0x01, 0x95, 0x03, 0x81, 0x02,
+    0x75, 0x05, 0x95, 0x01, 0x81, 0x03, 0xC0,
 };
-HIDMouse Mouse(HID);
+static uint8_t mouse_report[6];
+HIDReporter Mouse(HID, mouse_report, sizeof(mouse_report), HID_MOUSE_REPORT_ID, true);
 HIDConsumer Consumer(HID);
+static uint8_t system_report[2];
+HIDReporter SystemControl(HID, system_report, sizeof(system_report), 4, true);
 /* HID_KEYBOARD uses USBComposite's standard keyboard descriptor, whose
  * keyboard report ID is 2. Keep the sender and descriptor aligned. */
 HIDKeyboard Keyboard(HID, HID_KEYBOARD_REPORT_ID);
@@ -76,6 +96,10 @@ static bool tap_hold_is_held[KEY_COUNT];
 static uint32_t pressed_at[KEY_COUNT];
 static uint8_t tt_tap_count[KEY_COUNT];
 static uint32_t tt_last_tap_at[KEY_COUNT];
+static uint8_t mouse_buttons = 0;
+static uint8_t mouse_motion = 0;
+static uint8_t mouse_acceleration = 1;
+static uint32_t last_mouse_report = 0;
 
 /* QMK keycodes, stored in the same big-endian order returned by VIA. */
 static uint16_t keymap[LAYER_COUNT][KEY_COUNT];
@@ -162,12 +186,41 @@ static bool settings_image_valid(const PersistentImage *image) {
                                sizeof(image->payload));
 }
 
+/* Version 1 already used the 512-byte payload, but stored compact clone RGB
+ * mode numbers. Keep it readable so an update preserves the user's map,
+ * macros, and lighting state. */
+static bool settings_v1_image_valid(const PersistentImage *image) {
+  return image->magic == SETTINGS_MAGIC &&
+         image->version == SETTINGS_V1_VERSION &&
+         image->payload_size == sizeof(PersistentPayload) &&
+         image->crc32 == crc32(reinterpret_cast<const uint8_t *>(&image->payload),
+                               sizeof(image->payload));
+}
+
 static bool legacy_settings_image_valid(const LegacyPersistentImage *image) {
   return image->magic == SETTINGS_MAGIC &&
-         image->version == SETTINGS_VERSION &&
+         image->version == SETTINGS_V1_VERSION &&
          image->payload_size == sizeof(LegacyPersistentPayload) &&
          image->crc32 == crc32(reinterpret_cast<const uint8_t *>(&image->payload),
                                sizeof(image->payload));
+}
+
+static uint8_t migrate_v1_rgb_effect(uint8_t effect) {
+  /* V1 used 1..10 as a compact set. Version 2 uses QMK RGBLight mode IDs. */
+  switch (effect) {
+    case 0: return 0;
+    case 1: return 1;   // static
+    case 2: return 2;   // breathing
+    case 3: return 6;   // rainbow mood
+    case 4: return 9;   // rainbow swirl
+    case 5: return 15;  // snake
+    case 6: return 21;  // knight
+    case 7: return 24;  // Christmas
+    case 8: return 25;  // static gradient
+    case 9: return 35;  // RGB test
+    case 10: return 37; // twinkle
+    default: return 1;
+  }
 }
 
 static void settings_load() {
@@ -188,7 +241,33 @@ static void settings_load() {
     memcpy(macro_buffer, chosen->payload.macro_buffer, sizeof(macro_buffer));
     rgb = chosen->payload.rgb;
     default_layer = chosen->payload.default_layer < LAYER_COUNT ? chosen->payload.default_layer : 0;
+    last_rgb_effect = rgb.effect != 0 ? rgb.effect : 1;
     settings_sequence = chosen->sequence;
+    return;
+  }
+
+  const PersistentImage *v1_a = reinterpret_cast<const PersistentImage *>(SETTINGS_PAGE_A);
+  const PersistentImage *v1_b = reinterpret_cast<const PersistentImage *>(SETTINGS_PAGE_B);
+  const bool v1_a_valid = settings_v1_image_valid(v1_a);
+  const bool v1_b_valid = settings_v1_image_valid(v1_b);
+  const PersistentImage *v1 = nullptr;
+  if (v1_a_valid && (!v1_b_valid || v1_a->sequence >= v1_b->sequence)) {
+    v1 = v1_a;
+    settings_active_page = SETTINGS_PAGE_A;
+  } else if (v1_b_valid) {
+    v1 = v1_b;
+    settings_active_page = SETTINGS_PAGE_B;
+  }
+  if (v1 != nullptr) {
+    memcpy(keymap, v1->payload.keymap, sizeof(keymap));
+    memcpy(macro_buffer, v1->payload.macro_buffer, sizeof(macro_buffer));
+    rgb = v1->payload.rgb;
+    rgb.effect = migrate_v1_rgb_effect(rgb.effect);
+    last_rgb_effect = rgb.effect != 0 ? rgb.effect : 1;
+    default_layer = v1->payload.default_layer < LAYER_COUNT ? v1->payload.default_layer : 0;
+    settings_sequence = v1->sequence;
+    settings_dirty = true;
+    settings_save_at = millis() + SETTINGS_SAVE_DELAY_MS;
     return;
   }
 
@@ -204,6 +283,8 @@ static void settings_load() {
     memset(macro_buffer, 0, sizeof(macro_buffer));
     memcpy(macro_buffer, legacy->payload.macro_buffer, LEGACY_MACRO_BYTES);
     rgb = legacy->payload.rgb;
+    rgb.effect = migrate_v1_rgb_effect(rgb.effect);
+    last_rgb_effect = rgb.effect != 0 ? rgb.effect : 1;
     default_layer = 0;
     settings_sequence = legacy->sequence;
     /* Commit the enlarged record after USB has had time to enumerate. */
@@ -302,40 +383,43 @@ static void rgb_render() {
   uint8_t base_hue = rgb.hue;
   uint8_t value = rgb.brightness;
   const uint8_t frame = millis() / (257 - rgb.speed);
-  if (rgb.effect == 0) value = 0;
-  if (rgb.effect == 2) { // QMK RGBLIGHT_MODE_BREATHING
+  const uint8_t effect = rgb.effect;
+  if (effect == 0) value = 0;
+  if (effect >= 2 && effect <= 5) { // QMK breathing variants
     const uint8_t phase = frame;
     const uint8_t wave = phase < 128 ? phase * 2 : (255 - phase) * 2;
     value = ((uint16_t)value * wave) >> 8;
   }
-  if (rgb.effect == 3 || rgb.effect == 4 || rgb.effect == 9) base_hue += frame;
+  if ((effect >= 6 && effect <= 14) || effect == 35) base_hue += frame;
   noInterrupts();
   for (uint8_t led = 0; led < RGB_LED_COUNT; ++led) {
     uint8_t r, g, b;
     uint8_t hue = base_hue;
     uint8_t led_value = value;
-    switch (rgb.effect) {
-      case 4: hue += led * 32; break; // rainbow swirl
-      case 5: { // snake
+    if (effect >= 9 && effect <= 14) { // rainbow swirl variants
+      hue += led * (16 + (effect - 9) * 8);
+    } else if (effect >= 15 && effect <= 20) { // snake variants
         const uint8_t head = frame % RGB_LED_COUNT;
-        led_value = led == head ? value : 0;
-        break;
-      }
-      case 6: { // knight rider
+        const uint8_t distance = (uint8_t)(led + RGB_LED_COUNT - head) % RGB_LED_COUNT;
+        led_value = distance < 1 + (effect - 15) / 2 ? value : 0;
+    } else if (effect >= 21 && effect <= 23) { // knight rider variants
         const uint8_t step = frame % ((RGB_LED_COUNT - 1) * 2);
         const uint8_t head = step < RGB_LED_COUNT ? step : (RGB_LED_COUNT - 1) * 2 - step;
-        led_value = led == head ? value : 0;
-        break;
-      }
-      case 7: hue = (led & 1) ? 85 : 0; break; // Christmas green/red
-      case 8: hue += led * (255 / RGB_LED_COUNT); break; // static gradient
-      case 9: hue = frame; break; // RGB test
-      case 10: { // deterministic twinkle without an RNG state
+        const uint8_t distance = led > head ? led - head : head - led;
+        led_value = distance <= (effect - 21) ? value : 0;
+    } else if (effect == 24) { // Christmas
+      hue = (led & 1) ? 85 : 0;
+    } else if (effect >= 25 && effect <= 34) { // static gradient variants
+      static const uint8_t gradient_steps[] = {32, 43, 51, 64, 85, 96, 112, 127, 170, 255};
+      hue += led * gradient_steps[effect - 25];
+    } else if (effect == 35) { // RGB test: red, green, blue
+      hue = ((frame >> 5) % 3) * 85;
+    } else if (effect == 36) { // alternating
+      hue += (led & 1) ? 128 : 0;
+    } else if (effect >= 37 && effect <= 42) { // deterministic twinkle variants
         const uint8_t sparkle = (uint8_t)(frame * 37 + led * 67);
-        led_value = sparkle > 224 ? value : value / 12;
-        break;
-      }
-      default: break;
+        const uint8_t threshold = 224 - (effect - 37) * 12;
+        led_value = sparkle > threshold ? value : value / 12;
     }
     if (device_indication) hsv_to_rgb(0, 0, 96, &r, &g, &b);
     else hsv_to_rgb(hue, rgb.saturation, led_value, &r, &g, &b);
@@ -347,8 +431,12 @@ static void rgb_render() {
   delayMicroseconds(80);
 }
 
+static bool rgb_effect_valid(uint8_t effect) {
+  return effect <= 42;
+}
+
 static void rgb_set_effect(uint8_t effect) {
-  rgb.effect = effect;
+  rgb.effect = rgb_effect_valid(effect) ? effect : 1;
   if (effect != 0) last_rgb_effect = effect;
   rgb_render();
   settings_mark_dirty();
@@ -365,8 +453,8 @@ static bool process_rgb_keycode(uint16_t keycode, bool pressed) {
   if (!pressed) return keycode >= 0x7820 && keycode <= 0x7834;
   switch (keycode) {
     case 0x7820: rgb_set_effect(rgb.effect == 0 ? last_rgb_effect : 0); return true;
-    case 0x7821: rgb_set_effect(rgb.effect >= 10 ? 1 : rgb.effect + 1); return true;
-    case 0x7822: rgb_set_effect(rgb.effect <= 1 ? 10 : rgb.effect - 1); return true;
+    case 0x7821: rgb_set_effect(rgb.effect >= 42 ? 1 : rgb.effect + 1); return true;
+    case 0x7822: rgb_set_effect(rgb.effect <= 1 ? 42 : rgb.effect - 1); return true;
     case 0x7823: rgb.hue += 8; break;
     case 0x7824: rgb.hue -= 8; break;
     case 0x7825: rgb_adjust(&rgb.saturation, 8); break;
@@ -376,8 +464,19 @@ static bool process_rgb_keycode(uint16_t keycode, bool pressed) {
     case 0x7829: rgb_adjust(&rgb.speed, 8); break;
     case 0x782A: rgb_adjust(&rgb.speed, -8); break;
     default:
-      if (keycode >= 0x782B && keycode <= 0x7834) rgb.effect = keycode - 0x782A;
-      else return false;
+      switch (keycode) {
+        case 0x782B: rgb.effect = 1; break;  // RGB_MODE_PLAIN
+        case 0x782C: rgb.effect = 2; break;  // RGB_MODE_BREATHE
+        case 0x782D: rgb.effect = 6; break;  // RGB_MODE_RAINBOW
+        case 0x782E: rgb.effect = 9; break;  // RGB_MODE_SWIRL
+        case 0x782F: rgb.effect = 15; break; // RGB_MODE_SNAKE
+        case 0x7830: rgb.effect = 21; break; // RGB_MODE_KNIGHT
+        case 0x7831: rgb.effect = 24; break; // RGB_MODE_XMAS
+        case 0x7832: rgb.effect = 25; break; // RGB_MODE_GRADIENT
+        case 0x7833: rgb.effect = 35; break; // RGB_MODE_RGBTEST
+        case 0x7834: rgb.effect = 37; break; // RGB_MODE_TWINKLE
+        default: return false;
+      }
       break;
   }
   if (rgb.effect != 0) last_rgb_effect = rgb.effect;
@@ -418,9 +517,11 @@ static uint16_t qmk_consumer_usage(uint8_t usage) {
     case 0xAC: return HIDConsumer::PREVIOUS_TRACK;
     case 0xAD: return 0x00B7; // Consumer Stop
     case 0xAE: return HIDConsumer::PLAY_OR_PAUSE;
+    case 0xAF: return 0x0183; // Consumer Media Select
     case 0xB0: return 0x00B8; // Consumer Eject
     case 0xB1: return 0x018A; // Consumer AL Email Reader
     case 0xB2: return 0x0192; // Consumer AL Calculator
+    case 0xB3: return 0x0194; // Consumer AL File Browser (My Computer)
     case 0xB4: return 0x0221; // Consumer AC Search
     case 0xB5: return 0x0223; // Consumer AC Home
     case 0xB6: return 0x0224; // Consumer AC Back
@@ -432,8 +533,88 @@ static uint16_t qmk_consumer_usage(uint8_t usage) {
     case 0xBC: return HIDConsumer::REWIND;
     case 0xBD: return HIDConsumer::BRIGHTNESS_UP;
     case 0xBE: return HIDConsumer::BRIGHTNESS_DOWN;
+    case 0xBF: return 0x019F; // Consumer AL Control Panel
     default: return 0;
   }
+}
+
+enum MouseMotion : uint8_t {
+  MOUSE_MOVE_UP = 1 << 0,
+  MOUSE_MOVE_DOWN = 1 << 1,
+  MOUSE_MOVE_LEFT = 1 << 2,
+  MOUSE_MOVE_RIGHT = 1 << 3,
+  MOUSE_WHEEL_UP = 1 << 4,
+  MOUSE_WHEEL_DOWN = 1 << 5,
+  MOUSE_WHEEL_LEFT = 1 << 6,
+  MOUSE_WHEEL_RIGHT = 1 << 7,
+};
+
+static void mouse_send(int8_t x, int8_t y, int8_t wheel, int8_t pan) {
+  mouse_report[1] = mouse_buttons;
+  mouse_report[2] = (uint8_t)x;
+  mouse_report[3] = (uint8_t)y;
+  mouse_report[4] = (uint8_t)wheel;
+  mouse_report[5] = (uint8_t)pan;
+  Mouse.sendReport();
+}
+
+static bool process_mouse_keycode(uint8_t usage, bool pressed) {
+  uint8_t motion_bit = 0;
+  switch (usage) {
+    case 0xCD: motion_bit = MOUSE_MOVE_UP; break;
+    case 0xCE: motion_bit = MOUSE_MOVE_DOWN; break;
+    case 0xCF: motion_bit = MOUSE_MOVE_LEFT; break;
+    case 0xD0: motion_bit = MOUSE_MOVE_RIGHT; break;
+    case 0xD9: motion_bit = MOUSE_WHEEL_UP; break;
+    case 0xDA: motion_bit = MOUSE_WHEEL_DOWN; break;
+    case 0xDB: motion_bit = MOUSE_WHEEL_LEFT; break;
+    case 0xDC: motion_bit = MOUSE_WHEEL_RIGHT; break;
+    default: break;
+  }
+  if (motion_bit != 0) {
+    if (pressed) mouse_motion |= motion_bit;
+    else mouse_motion &= (uint8_t)~motion_bit;
+    return true;
+  }
+  if (usage >= 0xD1 && usage <= 0xD8) {
+    const uint8_t button = (uint8_t)(1U << (usage - 0xD1));
+    if (pressed) mouse_buttons |= button;
+    else mouse_buttons &= (uint8_t)~button;
+    mouse_send(0, 0, 0, 0);
+    return true;
+  }
+  if (usage >= 0xDD && usage <= 0xDF) {
+    if (pressed) mouse_acceleration = usage - 0xDD;
+    return true;
+  }
+  return false;
+}
+
+static void mouse_task(uint32_t now) {
+  if (mouse_motion == 0 || now - last_mouse_report < MOUSEKEY_INTERVAL_MS) return;
+  static const int8_t speeds[] = {4, 8, 16};
+  const int8_t speed = speeds[mouse_acceleration];
+  const int8_t x = (mouse_motion & MOUSE_MOVE_RIGHT ? speed : 0) -
+                   (mouse_motion & MOUSE_MOVE_LEFT ? speed : 0);
+  const int8_t y = (mouse_motion & MOUSE_MOVE_DOWN ? speed : 0) -
+                   (mouse_motion & MOUSE_MOVE_UP ? speed : 0);
+  const int8_t wheel = (mouse_motion & MOUSE_WHEEL_UP ? 1 : 0) -
+                       (mouse_motion & MOUSE_WHEEL_DOWN ? 1 : 0);
+  const int8_t pan = (mouse_motion & MOUSE_WHEEL_RIGHT ? 1 : 0) -
+                     (mouse_motion & MOUSE_WHEEL_LEFT ? 1 : 0);
+  mouse_send(x, y, wheel, pan);
+  last_mouse_report = now;
+}
+
+static bool process_system_keycode(uint8_t usage, bool pressed) {
+  uint8_t bit = 0;
+  if (usage == 0xA5) bit = 1;      // KC_PWR: System Power Down
+  else if (usage == 0xA6) bit = 2; // KC_SLEP: System Sleep
+  else if (usage == 0xA7) bit = 4; // KC_WAKE: System Wake Up
+  else return false;
+  system_report[1] = pressed ? bit : 0;
+  SystemControl.sendReport();
+  return true;
 }
 
 static bool send_qmk_usage(uint8_t usage, bool pressed) {
@@ -443,6 +624,8 @@ static bool send_qmk_usage(uint8_t usage, bool pressed) {
     else Keyboard.release(arduino_key);
     return true;
   }
+
+  if (process_system_keycode(usage, pressed)) return true;
 
   const uint16_t consumer_usage = qmk_consumer_usage(usage);
   if (consumer_usage != 0) {
@@ -475,26 +658,7 @@ static bool send_qmk_usage(uint8_t usage, bool pressed) {
     return true;
   }
 
-  if (!pressed) {
-    switch (usage) {
-      case 0xD1: Mouse.release(MOUSE_LEFT); return true;
-      case 0xD2: Mouse.release(MOUSE_RIGHT); return true;
-      case 0xD3: Mouse.release(MOUSE_MIDDLE); return true;
-      default: return usage >= 0xCD && usage <= 0xDC;
-    }
-  }
-  switch (usage) {
-    case 0xCD: Mouse.move(0, -8, 0); return true;
-    case 0xCE: Mouse.move(0, 8, 0); return true;
-    case 0xCF: Mouse.move(-8, 0, 0); return true;
-    case 0xD0: Mouse.move(8, 0, 0); return true;
-    case 0xD1: Mouse.press(MOUSE_LEFT); return true;
-    case 0xD2: Mouse.press(MOUSE_RIGHT); return true;
-    case 0xD3: Mouse.press(MOUSE_MIDDLE); return true;
-    case 0xD9: Mouse.move(0, 0, 1); return true;
-    case 0xDA: Mouse.move(0, 0, -1); return true;
-    default: return false;
-  }
+  return process_mouse_keycode(usage, pressed);
 }
 
 static void macro_tap_usage(uint8_t usage) {
@@ -776,6 +940,7 @@ static bool via_set_rgblight(const uint8_t *data) {
   switch (data[2]) {
     case 0x01: rgb.brightness = data[3]; break;
     case 0x02:
+      if (!rgb_effect_valid(data[3])) return false;
       rgb.effect = data[3];
       if (rgb.effect != 0) last_rgb_effect = rgb.effect;
       break;
@@ -941,6 +1106,8 @@ void loop() {
       process_key(i, stable_state[i]);
     }
   }
+
+  mouse_task(now);
 
   if (rgb.effect >= 2 && now - last_rgb_frame >= 20) {
     last_rgb_frame = now;

@@ -4,7 +4,7 @@
 
 - Arduino build: `stm32duino:STM32F1:genericSTM32F103C6`, ST-Link method,
   72 MHz, size optimization.
-- Latest local build size: 24,316 / 32,768 bytes flash; 4,592 / 10,240 bytes
+- Latest local build size: 24,924 / 32,768 bytes flash; 4,616 / 10,240 bytes
   RAM. The GitHub Actions job rejects any binary above 30,720 bytes, preserving
   the final two 1 KiB settings pages.
 - VIA definition: validated as `KeyboardDefinitionV3`; VID `0x7877`, PID
@@ -30,21 +30,25 @@ Run this on each hardware revision before release:
 5. Assign and test `MO(1)`, `TG(1)`, `LT(1, KC_A)`, `LCTL_T(KC_ESC)`,
    `OSL(1)`, and `PDF(1)` through VIA. Verify transparent keys fall through
    to the lower layer and `PDF` survives a power cycle.
-6. Assign volume up/down, play/pause, next/previous track, mouse click, mouse
-   cursor, and mouse wheel keycodes. Verify Windows reports a consumer-control
-   and mouse HID function, then test each action.
-7. Verify `RGB_TOG`, RGB hue/saturation/value/speed controls, plus RGB modes
-   1 through 10. Mode 0 must turn all LEDs off.
-8. Change RGB brightness, effect, speed, and color; wait one second,
+6. Assign volume up/down, play/pause, next/previous track, browser controls,
+   and `KC_PWR`/`KC_SLEP`/`KC_WAKE`. Verify Windows reports consumer-control
+   and system-control HID functions. Test power-related keycodes only on a
+   non-critical machine because the operating system may sleep or power off.
+7. Assign and hold cursor movement, vertical/horizontal wheel, Mouse Buttons
+   1 through 8, and acceleration levels 0 through 2. Verify motion repeats at
+   the selected speed and all button releases are clean.
+8. Verify `RGB_TOG`, RGB hue/saturation/value/speed controls, plus QMK
+   RGBLight effect IDs 1 through 42. Mode 0 must turn all LEDs off.
+9. Change RGB brightness, effect, speed, and color; wait one second,
    power-cycle, and confirm the saved state.
-9. Repeat the power-cycle test while editing a macro, then confirm that either
+10. Repeat the power-cycle test while editing a macro, then confirm that either
    the previous complete record or the new complete record loads (never a
    partially-corrupted map). The dual-page CRC record is designed for this.
-10. Confirm USB reconnects after 100 unplug/replug cycles and keys do not stick
+11. Confirm USB reconnects after 100 unplug/replug cycles and keys do not stick
    when held during reconnect.
-11. Run a 30-minute key-repeat and RGB-effect soak test; confirm no USB reset,
+12. Run a 30-minute key-repeat and RGB-effect soak test; confirm no USB reset,
     missed key release, or unexpected RGB corruption.
-12. Update the firmware using page erase (not Mass Erase), then power-cycle and
+13. Update the firmware using page erase (not Mass Erase), then power-cycle and
     confirm the saved keymap, macro, RGB state, and persistent default layer
     remain. Separately verify that a deliberate Mass Erase resets all of them.
 
