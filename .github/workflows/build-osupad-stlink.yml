@@ -29,6 +29,7 @@ jobs:
       - name: Build ST-Link firmware
         working-directory: /tmp/qmk_firmware
         run: |
+          /opt/uv/tools/qmk/bin/python3 -m pip install -r requirements.txt
           cp -a "$GITHUB_WORKSPACE/FIRMWARE/osupad_stlink" keyboards/osupad_stlink
           make osupad_stlink:via
           mkdir -p "$GITHUB_WORKSPACE/artifacts"
