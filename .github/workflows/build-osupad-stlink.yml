@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'FIRMWARE/osupad_stlink/**'
+      - 'FIRMWARE/osupad_c6_stlink_probe/**'
       - '.github/workflows/build-osupad-stlink.yml'
   workflow_dispatch:
 
