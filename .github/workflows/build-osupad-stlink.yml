@@ -160,6 +160,9 @@ jobs:
           # STM32duino bootloader.
           cp /qmk_firmware_0169/keyboards/osupad_c6_stlink_probe/rules_legacy.mk \
             /qmk_firmware_0169/keyboards/osupad_c6_stlink_probe/rules.mk
+          rm /qmk_firmware_0169/keyboards/osupad_c6_stlink_probe/keyboard.json
+          cp /qmk_firmware_0169/keyboards/osupad_c6_stlink_probe/config_legacy.h \
+            /qmk_firmware_0169/keyboards/osupad_c6_stlink_probe/config.h
           qmk config user.qmk_home=/qmk_firmware_0169
           cd /qmk_firmware_0169
           # QMK 0.16.9 predates the current CLI's `hello` command. The
