@@ -1,8 +1,9 @@
 # OSUpad ST-Link firmware
 
 This is the OSUpad QMK firmware variant for direct SWD programming with an
-ST-Link. It deliberately has no USB bootloader configured, so the QMK
-application is linked to flash address `0x08000000`.
+ST-Link. Its QMK metadata links the application to flash address `0x08000000`.
+The `stm32-dfu` metadata is only used for that zero-offset link layout: the
+STM32F103 is not flashed through USB DFU.
 
 ## Build
 

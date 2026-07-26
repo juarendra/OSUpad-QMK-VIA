@@ -5,10 +5,6 @@ on:
     paths:
       - 'FIRMWARE/osupad_stlink/**'
       - '.github/workflows/build-osupad-stlink.yml'
-  pull_request:
-    paths:
-      - 'FIRMWARE/osupad_stlink/**'
-      - '.github/workflows/build-osupad-stlink.yml'
   workflow_dispatch:
 
 permissions:
@@ -16,32 +12,24 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    container: ghcr.io/qmk/qmk_cli:latest
 
     steps:
       - name: Check out OSUpad sources
         uses: actions/checkout@v4
 
-      - name: Install ARM build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes gcc-arm-none-eabi libnewlib-arm-none-eabi make
-
-      - name: Check out compatible QMK Firmware
-        run: git clone --branch 0.22.14 --depth 1 --recurse-submodules https://github.com/qmk/qmk_firmware.git /tmp/qmk_firmware
+      - name: Set up QMK Firmware
+        run: qmk setup -y -H /qmk_firmware qmk/qmk_firmware
 
       - name: Build ST-Link firmware
-        working-directory: /tmp/qmk_firmware
         run: |
-          python3 -m pip install --user -r requirements.txt
-          cp -a "$GITHUB_WORKSPACE/FIRMWARE/osupad_stlink" keyboards/osupad_stlink
-          make osupad_stlink:via
-          mkdir -p "$GITHUB_WORKSPACE/artifacts"
-          find .build -maxdepth 1 -type f -name 'osupad_stlink_via.*' -exec cp {} "$GITHUB_WORKSPACE/artifacts/" \;
+          cp -r FIRMWARE/osupad_stlink /qmk_firmware/keyboards/osupad_stlink
+          qmk compile -kb osupad_stlink -km via
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v4
         with:
           name: osupad-stlink-firmware
-          path: artifacts/osupad_stlink_via.bin
+          path: /qmk_firmware/osupad_stlink_via.bin
           if-no-files-found: error
