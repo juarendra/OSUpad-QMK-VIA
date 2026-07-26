@@ -102,7 +102,10 @@ jobs:
           curl --fail --location --retry 3 \
             --output "$sdk_archive" \
             https://global.geehy.com/uploads/tool/APM32F10x_SDK_V2.0.0.zip
-          unzip -q "$sdk_archive" -d "$sdk_root"
+          # The vendor archive contains one non-ASCII filename whose local and
+          # central-directory encodings disagree. unzip still extracts the SDK
+          # correctly but returns status 1, so verify the required directory.
+          unzip -q "$sdk_archive" -d "$sdk_root" || test -d "$sdk_root/APM32F10x_SDK_V2.0.0"
 
           sdk="$(find "$sdk_root" -maxdepth 1 -type d -name 'APM32F10x_SDK_*' | head -n 1)"
           test -n "$sdk"
