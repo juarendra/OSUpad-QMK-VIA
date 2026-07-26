@@ -31,3 +31,11 @@ must be flashed through ST-Link (or the STM32F103 ROM UART bootloader).
 The workflow also produces `osupad-stlink-clone-diagnostic`, a conservative
 build with LTO and NKRO disabled. It is the first USB compatibility test for
 F103-compatible clones; it is flashed at the same `0x08000000` address.
+
+## Main-stack clone diagnostic
+
+The `osupad-stlink-clone-msp-diagnostic` artifact also disables LTO and NKRO,
+then starts QMK with the Cortex-M main stack (MSP) rather than the usual
+process stack (PSP). It is a diagnostic for a chip that enters a HardFault
+straight after reset. Flash it through ST-Link at `0x08000000`; it does not
+change the bootloader or option-byte settings.
