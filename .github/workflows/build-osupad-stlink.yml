@@ -110,6 +110,16 @@ jobs:
           sdk="$(find "$sdk_root" -maxdepth 1 -type d -name 'APM32F10x_SDK_*' | head -n 1)"
           test -n "$sdk"
           example="$sdk/Examples/Board_APM32F103_Mini/USB/Device_Examples/USBD_CUSTOM_HID_Keyboard"
+          # The SDK examples target case-insensitive Windows filesystems. Fix
+          # their board-header spelling only in this temporary SDK copy so GCC
+          # on the Linux runner can resolve the same files.
+          ln -s Board.h "$sdk/Boards/board.h"
+          sed -i \
+            -e 's#Board_APM32F103_MINI\\inc\\board_apm32f103_mini.h#Board_APM32F103_MINI/inc/Board_APM32F103_MINI.h#g' \
+            -e 's#Board_APM32F103_MINI\\src\\board_apm32f103_mini.c#Board_APM32F103_MINI/src/Board_APM32F103_MINI.c#g' \
+            "$sdk/Boards/Board.h" \
+            "$sdk/Boards/Board.c" \
+            "$sdk/Boards/Board_APM32F103_MINI/src/Board_APM32F103_MINI.c"
           output_dir=/tmp/apm32-usb-keyboard-probe
           mkdir -p "$output_dir"
 
