@@ -5,6 +5,11 @@ ST-Link. Its QMK metadata links the application to flash address `0x08000000`.
 It uses QMK's `custom` bootloader mode, so no USB bootloader is included or
 entered by the firmware.
 
+The board profile is local to this keyboard. Although it keeps the same F103
+clock and USB setup as QMK's STM32duino board, it deliberately does not write
+the STM32duino bootloader flag to the RTC backup register. This matters for
+F103-compatible clone chips programmed directly with ST-Link.
+
 ## Build
 
 Copy this `osupad_stlink` directory to `qmk_firmware/keyboards/`, then build:
