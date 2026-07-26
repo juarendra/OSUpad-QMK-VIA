@@ -1,7 +1,9 @@
 # OSUpad Clone VIA (Arduino)
 
-This firmware keeps the proven STM32duino/libmaple USB path and exposes a
-keyboard plus a 32-byte vendor Raw HID collection for VIA Web.
+This firmware keeps the proven STM32duino/libmaple USB path and exposes two
+USB HID interfaces: a keyboard and a dedicated 32-byte vendor Raw HID
+interface for VIA Web. The dedicated interface has QMK's expected usage page
+`0xFF60`, usage `0x61`, and no report ID.
 
 It provides four editable layers, 16 text macros, and eight WS2812 LEDs on
 PA5. Use `via-definition.json` with VIA Web's **Design** tab to sideload the

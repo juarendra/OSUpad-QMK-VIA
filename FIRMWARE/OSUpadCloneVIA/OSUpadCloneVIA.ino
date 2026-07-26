@@ -13,6 +13,8 @@
 #include <USBComposite.h>
 #include <libmaple/gpio.h>
 
+#include "via_raw_hid.h"
+
 static const uint8_t KEY_COUNT = 6;
 static const uint8_t LAYER_COUNT = 4;
 static const uint8_t MACRO_COUNT = 16;
@@ -23,54 +25,8 @@ static const uint8_t RAW_REPORT_BYTES = 32;
 
 static const uint8_t key_pins[KEY_COUNT] = {PB0, PA7, PA6, PB12, PB13, PB14};
 
-/* VIA raw HID uses this vendor collection. Keyboard and raw HID report IDs
- * share one libmaple HID interface; WebHID exposes the vendor collection. */
-static const uint8_t hid_report_descriptor[] = {
-    HID_KEYBOARD_REPORT_DESCRIPTOR(1),
-    0x06, 0x60, 0xFF,       // Usage page 0xFF60 (QMK Raw HID)
-    0x09, 0x61,             // Usage 0x61
-    0xA1, 0x01,
-    0x85, 0x02,             // Report ID 2
-    0x75, 0x08,
-    0x15, 0x00,
-    0x26, 0xFF, 0x00,
-    0x95, RAW_REPORT_BYTES,
-    0x09, 0x62,
-    0x81, 0x02,             // Input
-    0x95, RAW_REPORT_BYTES,
-    0x09, 0x63,
-    0x91, 0x02,             // Output
-    0xC0,
-};
-
 USBHID HID;
 HIDKeyboard Keyboard(HID, 1);
-
-class ViaRawHID : public HIDReporter {
-  public:
-    ViaRawHID(USBHID &hid)
-        : HIDReporter(hid, tx_, sizeof(tx_), 2, true),
-          output_(rx_, sizeof(rx_), 2, HID_BUFFER_MODE_NO_WAIT) {}
-
-    void begin() { HID.addOutputBuffer(&output_); }
-
-    bool receive(uint8_t *data) {
-      return getOutput(data, 1) == RAW_REPORT_BYTES;
-    }
-
-    void send(const uint8_t *data) {
-      tx_[0] = 2;
-      memcpy(tx_ + 1, data, RAW_REPORT_BYTES);
-      sendReport();
-    }
-
-  private:
-    uint8_t tx_[RAW_REPORT_BYTES + 1];
-    uint8_t rx_[RAW_REPORT_BYTES + 1];
-    HIDBuffer_t output_;
-};
-
-ViaRawHID ViaRaw(HID);
 
 static bool stable_state[KEY_COUNT];
 static bool sampled_state[KEY_COUNT];
@@ -303,7 +259,7 @@ static void handle_via(uint8_t *data) {
     }
     default: data[0] = 0xFF; break;
   }
-  ViaRaw.send(data);
+  via_raw_hid_send(data);
 }
 
 void setup() {
@@ -326,14 +282,18 @@ void setup() {
   USBComposite.setProductString("OSUpad Clone VIA");
   USBComposite.setSerialString("OSUPAD-C6-VIA");
   USBComposite.setDisconnectDelay(500);
-  HID.begin(hid_report_descriptor, sizeof(hid_report_descriptor));
+  /* Keep keyboard and VIA Raw HID as two independent HID interfaces. */
+  USBComposite.clear();
+  HID.setReportDescriptor(HID_KEYBOARD);
+  HID.registerComponent();
+  via_raw_hid_register();
+  USBComposite.begin();
   Keyboard.begin();
-  ViaRaw.begin();
 }
 
 void loop() {
   uint8_t report[RAW_REPORT_BYTES];
-  if (ViaRaw.receive(report)) handle_via(report);
+  if (via_raw_hid_receive(report)) handle_via(report);
 
   const uint32_t now = millis();
   for (uint8_t i = 0; i < KEY_COUNT; ++i) {
