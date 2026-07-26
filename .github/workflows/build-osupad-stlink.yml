@@ -158,7 +158,8 @@ jobs:
           # its build validation; the local direct linker script still starts
           # the image at 0x08000000 and the board code does not request a
           # STM32duino bootloader.
-          echo 'BOOTLOADER = stm32duino' >> /qmk_firmware_0169/keyboards/osupad_c6_stlink_probe/rules.mk
+          cp /qmk_firmware_0169/keyboards/osupad_c6_stlink_probe/rules_legacy.mk \
+            /qmk_firmware_0169/keyboards/osupad_c6_stlink_probe/rules.mk
           qmk config user.qmk_home=/qmk_firmware_0169
           cd /qmk_firmware_0169
           # QMK 0.16.9 predates the current CLI's `hello` command. The
