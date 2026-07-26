@@ -4,8 +4,8 @@
     "maintainer": "juarendra",
     "url": "https://www.tokopedia.com/positronelectronic",
     "processor": "STM32F103",
-    "bootloader": "stm32-dfu",
-    "board": "STM32F103C8_MINIMAL",
+    "bootloader": "custom",
+    "board": "STM32_F103_STM32DUINO",
     "bootloader_instructions": "Flash through ST-Link/SWD at address 0x08000000.",
     "build": {
         "lto": true
