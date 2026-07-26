@@ -81,3 +81,78 @@ jobs:
           name: osupad-stlink-clone-msp-diagnostic
           path: /qmk_firmware/osupad_stlink_clone_msp_diagnostic.bin
           if-no-files-found: error
+
+  apm32-usb-keyboard-probe:
+    # This is a hardware-identification probe, not the QMK firmware.  It
+    # builds Geehy's APM32F103 USB Custom-HID keyboard example from the
+    # vendor SDK at build time, so no vendor source is committed here.
+    runs-on: ubuntu-latest
+    container: ghcr.io/qmk/qmk_cli:latest
+
+    steps:
+      - name: Check out OSUpad sources
+        uses: actions/checkout@v4
+
+      - name: Download and build APM32F103 USB keyboard probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk_archive=/tmp/APM32F10x_SDK_V2.0.0.zip
+          sdk_root=/tmp/apm32-sdk
+          curl --fail --location --retry 3 \
+            --output "$sdk_archive" \
+            https://global.geehy.com/uploads/tool/APM32F10x_SDK_V2.0.0.zip
+          unzip -q "$sdk_archive" -d "$sdk_root"
+
+          sdk="$(find "$sdk_root" -maxdepth 1 -type d -name 'APM32F10x_SDK_*' | head -n 1)"
+          test -n "$sdk"
+          example="$sdk/Examples/Board_APM32F103_Mini/USB/Device_Examples/USBD_CUSTOM_HID_Keyboard"
+          output_dir=/tmp/apm32-usb-keyboard-probe
+          mkdir -p "$output_dir"
+
+          includes=(
+            "$example/Include"
+            "$sdk/Middlewares/USB_Library/Device/Class/CustomHID/Inc"
+            "$sdk/Middlewares/USB_Library/Device/Core/Inc"
+            "$sdk/Boards"
+            "$sdk/Boards/Board_APM32F103_MINI/inc"
+            "$sdk/Libraries/APM32F10x_StdPeriphDriver/inc"
+            "$sdk/Libraries/CMSIS/Include"
+            "$sdk/Libraries/Device/Geehy/APM32F10x/Include"
+          )
+          include_flags=()
+          for include in "${includes[@]}"; do
+            include_flags+=("-I$include")
+          done
+
+          sources=(
+            "$sdk/Boards/Board.c"
+            "$sdk/Boards/Board_APM32F103_MINI/src/board_delay.c"
+            "$example"/Source/*.c
+            "$sdk"/Libraries/APM32F10x_StdPeriphDriver/src/*.c
+            "$sdk"/Middlewares/USB_Library/Device/Core/Src/*.c
+            "$sdk/Middlewares/USB_Library/Device/Class/CustomHID/Src/usbd_customhid.c"
+            "$sdk/Libraries/Device/Geehy/APM32F10x/Source/gcc/startup_apm32f103xe.S"
+          )
+
+          arm-none-eabi-gcc \
+            -mcpu=cortex-m3 -mthumb -mfloat-abi=soft \
+            -Os -g3 -ffunction-sections -fdata-sections \
+            -DAPM32F103xE -DAPM32F103_MINI \
+            "${include_flags[@]}" \
+            "${sources[@]}" \
+            -T "$sdk/Libraries/Device/Geehy/APM32F10x/Source/gcc/apm32f103xe_flash.ld" \
+            --specs=nano.specs --specs=nosys.specs \
+            -Wl,--gc-sections,-Map,"$output_dir/apm32f103-usb-keyboard-probe.map" \
+            -o "$output_dir/apm32f103-usb-keyboard-probe.elf"
+          arm-none-eabi-objcopy -O binary \
+            "$output_dir/apm32f103-usb-keyboard-probe.elf" \
+            "$output_dir/apm32f103-usb-keyboard-probe.bin"
+          arm-none-eabi-size "$output_dir/apm32f103-usb-keyboard-probe.elf"
+
+      - name: Upload APM32 USB keyboard probe
+        uses: actions/upload-artifact@v4
+        with:
+          name: apm32f103-usb-keyboard-probe
+          path: /tmp/apm32-usb-keyboard-probe/apm32f103-usb-keyboard-probe.bin
+          if-no-files-found: error
