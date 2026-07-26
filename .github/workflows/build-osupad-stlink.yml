@@ -23,8 +23,8 @@ jobs:
       - name: Check out OSUpad sources
         uses: actions/checkout@v4
 
-      - name: Check out QMK Firmware
-        run: git clone --depth 1 --recurse-submodules https://github.com/qmk/qmk_firmware.git /tmp/qmk_firmware
+      - name: Check out compatible QMK Firmware
+        run: git clone --branch 0.22.14 --depth 1 --recurse-submodules https://github.com/qmk/qmk_firmware.git /tmp/qmk_firmware
 
       - name: Build ST-Link firmware
         working-directory: /tmp/qmk_firmware
