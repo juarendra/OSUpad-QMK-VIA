@@ -109,6 +109,32 @@ jobs:
           path: /qmk_firmware/osupad_c6_probe_default.bin
           if-no-files-found: error
 
+  c6-stlink-usb-hid-probe:
+    # The observed Arduino sketch is linked at 0x08000000, not behind a
+    # bootloader. This variant has the same C6 memory limits but starts at the
+    # reset address and is programmed through SWD.
+    runs-on: ubuntu-latest
+    container: ghcr.io/qmk/qmk_cli:latest
+
+    steps:
+      - name: Check out OSUpad sources
+        uses: actions/checkout@v4
+
+      - name: Set up QMK Firmware
+        run: qmk setup -y -H /qmk_firmware qmk/qmk_firmware
+
+      - name: Build direct STM32F103C6 USB-HID probe
+        run: |
+          cp -r FIRMWARE/osupad_c6_stlink_probe /qmk_firmware/keyboards/osupad_c6_stlink_probe
+          qmk compile -kb osupad_c6_stlink_probe -km default -e 'EXTRAFLAGS=-DCRT0_CONTROL_INIT=0'
+
+      - name: Upload direct STM32F103C6 USB-HID probe
+        uses: actions/upload-artifact@v4
+        with:
+          name: osupad-c6-stlink-usb-hid-probe
+          path: /qmk_firmware/osupad_c6_stlink_probe_default.bin
+          if-no-files-found: error
+
   apm32-usb-keyboard-probe:
     # This is a hardware-identification probe, not the QMK firmware.  It
     # builds Geehy's APM32F103 USB Custom-HID keyboard example from the

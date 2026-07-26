@@ -1,0 +1,5 @@
+BOARDSRC = $(BOARD_PATH)/boards/$(BOARD)/board.c
+BOARDINC = $(BOARD_PATH)/boards/$(BOARD)
+
+ALLCSRC += $(BOARDSRC)
+ALLINC  += $(BOARDINC)
