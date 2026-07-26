@@ -154,6 +154,7 @@ jobs:
       - name: Build legacy STM32F103C6 USB-HID probe
         run: |
           cp -r FIRMWARE/osupad_c6_stlink_probe /qmk_firmware_0169/keyboards/osupad_c6_stlink_probe
+          qmk config user.qmk_home=/qmk_firmware_0169
           cd /qmk_firmware_0169
           make osupad_c6_stlink_probe:default EXTRAFLAGS=-DCRT0_CONTROL_INIT=0
 
