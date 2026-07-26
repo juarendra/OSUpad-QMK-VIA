@@ -16,12 +16,16 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    container: ghcr.io/qmk/qmk_cli
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Check out OSUpad sources
         uses: actions/checkout@v4
+
+      - name: Install ARM build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes gcc-arm-none-eabi libnewlib-arm-none-eabi make
 
       - name: Check out compatible QMK Firmware
         run: git clone --branch 0.22.14 --depth 1 --recurse-submodules https://github.com/qmk/qmk_firmware.git /tmp/qmk_firmware
@@ -29,7 +33,7 @@ jobs:
       - name: Build ST-Link firmware
         working-directory: /tmp/qmk_firmware
         run: |
-          /opt/uv/tools/qmk/bin/python3 -m pip install -r requirements.txt
+          python3 -m pip install --user -r requirements.txt
           cp -a "$GITHUB_WORKSPACE/FIRMWARE/osupad_stlink" keyboards/osupad_stlink
           make osupad_stlink:via
           mkdir -p "$GITHUB_WORKSPACE/artifacts"
