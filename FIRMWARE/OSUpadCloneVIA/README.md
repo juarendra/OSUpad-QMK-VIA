@@ -11,6 +11,11 @@ V3 draft definition. Keep **Use V2 definitions (deprecated)** disabled in
 VIA's **Design** tab. Automatic listing requires a separate upstream VIA
 registry submission.
 
-The first build is intentionally RAM-backed. VIA changes work immediately but
-are reset after power loss. Flash-backed storage is kept as a separate follow-
-up because it must reserve two known-safe flash pages on clone hardware.
+Keymaps, macros, and RGB state are persistent. They are stored redundantly in
+the final two 1 KiB pages of the 32 KiB C6 application range (`0x08007800` and
+`0x08007C00`) with a versioned CRC32 record. Writes are coalesced for 750 ms;
+wait one second after editing before unplugging. No boot strap, option byte,
+read-out-protection, or bootloader area is modified.
+
+See `RELEASE_QA.md` for automated checks and the production acceptance test
+list.
