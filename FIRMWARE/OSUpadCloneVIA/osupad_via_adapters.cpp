@@ -148,10 +148,6 @@ bool OsupadCustomValue::validateState(const uint8_t*, size_t length) const {
 }
 
 namespace {
-void writeU32(uint8_t* p, uint32_t v) {
-  p[0] = (uint8_t)(v & 0xFF); p[1] = (uint8_t)((v >> 8) & 0xFF);
-  p[2] = (uint8_t)((v >> 16) & 0xFF); p[3] = (uint8_t)((v >> 24) & 0xFF);
-}
 uint32_t readU32(const uint8_t* p) {
   return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
@@ -186,7 +182,7 @@ bool OsupadStorage::readRecord(uint32_t addr, uint8_t* out) const {
 
 bool OsupadStorage::programRecord(uint32_t addr, const uint8_t* record) {
   if (!flash_.erasePage(addr)) return false;
-  for (uint16_t off = 0; off < kRecordSize; off += 2) {
+  for (size_t off = 0; off < kRecordSize; off += 2) {
     const uint8_t lo = record[off];
     const uint8_t hi = off + 1 < kRecordSize ? record[off + 1] : 0xFF;
     const uint16_t word = (uint16_t)lo | ((uint16_t)hi << 8);
@@ -235,8 +231,6 @@ bool OsupadStorage::begin() {
   activeValid_ = false;
   return true;  // empty or corrupt flash: Protocol load() will fail -> resetBuffers()
 }
-
-size_t OsupadStorage::capacity() const { return kRecordSize; }
 
 bool OsupadStorage::read(size_t offset, uint8_t* output, size_t length) {
   if (!activeValid_ || length == 0) return false;
