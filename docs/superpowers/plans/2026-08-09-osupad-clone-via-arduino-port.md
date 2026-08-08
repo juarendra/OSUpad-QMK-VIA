@@ -284,8 +284,8 @@ static void assertV1Effect(uint8_t oldEffect, uint8_t expectedNew) {
   assert(out[6] == (kPayloadBytes & 0xFF) && out[7] == (kPayloadBytes >> 8));
   assert(osupadCrc32(out + kStateHeaderSize, kPayloadBytes) ==
          ((uint32_t)out[8] | ((uint32_t)out[9] << 8) | ((uint32_t)out[10] << 16) | ((uint32_t)out[11] << 24)));
-  assert(out[kStateHeaderSize + 48 + 512 + 1] == expectedNew);  // migrated rgb.effect
-  assert(out[kStateHeaderSize + 48 + 512 + 5] == 2);            // default_layer kept
+  assert(out[kStateHeaderSize + 48 + 512 + 4 + 1] == expectedNew);  // migrated rgb.effect
+  assert(out[kStateHeaderSize + 48 + 512 + 4 + 5] == 2);            // default_layer kept
 }
 
 int main() {
@@ -301,9 +301,9 @@ int main() {
   assert(out[4] == 2 && out[5] == 0);
   assert(memcmp(out + kStateHeaderSize, rec + kOsvpHeaderSize, 48) == 0);       // keymap
   assert(memcmp(out + kStateHeaderSize + 48, rec + kOsvpHeaderSize + 48, 512) == 0);  // macros
-  assert(out[kStateHeaderSize + 48 + 512 + 0] == 0x30);  // brightness
-  assert(out[kStateHeaderSize + 48 + 512 + 1] == 21);    // effect unchanged (v2)
-  assert(out[kStateHeaderSize + 48 + 512 + 5] == 3);     // default_layer
+  assert(out[kStateHeaderSize + 48 + 512 + 4 + 0] == 0x30);  // brightness
+  assert(out[kStateHeaderSize + 48 + 512 + 4 + 1] == 21);    // effect unchanged (v2)
+  assert(out[kStateHeaderSize + 48 + 512 + 4 + 5] == 3);     // default_layer
 
   // Legacy OSVP (192-byte macros) -> VIAA, macro zero-padded, default_layer 0
   memset(rec, 0xFF, sizeof(rec));
@@ -315,7 +315,7 @@ int main() {
   assert(memcmp(out + kStateHeaderSize + 48, rec + kOsvpHeaderSize + 48, kOsvpLegacyMacroBytes) == 0);
   for (int i = 48 + (int)kOsvpLegacyMacroBytes; i < 48 + 512; ++i)
     assert(out[kStateHeaderSize + i] == 0);               // padded
-  assert(out[kStateHeaderSize + 48 + 512 + 5] == 0);      // default_layer 0
+  assert(out[kStateHeaderSize + 48 + 512 + 4 + 5] == 0);      // default_layer 0
 
   // v1 compact RGB effects 1..10 -> QMK IDs
   assertV1Effect(1, 1);   // static
@@ -390,12 +390,16 @@ bool osupadConvertRecord(const uint8_t* oldRecord, size_t oldLen,
   memcpy(outPayload + 48, payload + 48, srcMacroBytes);             // macros
   uint8_t effect = payload[48 + srcMacroBytes + 1];
   if (version == 1) effect = migrateV1RgbEffect(effect);
-  outPayload[48 + kMacroBytes + 1] = effect;                        // rgb.effect (migrated)
-  outPayload[48 + kMacroBytes + 0] = payload[48 + srcMacroBytes + 0];  // brightness
-  outPayload[48 + kMacroBytes + 2] = payload[48 + srcMacroBytes + 2];  // speed
-  outPayload[48 + kMacroBytes + 3] = payload[48 + srcMacroBytes + 3];  // hue
-  outPayload[48 + kMacroBytes + 4] = payload[48 + srcMacroBytes + 4];  // saturation
-  outPayload[48 + kMacroBytes + 5] = legacy ? 0 : payload[48 + srcMacroBytes + 5];  // default_layer
+  // VIAA payload layout: keymap(48) + macros(512) + layoutOptions(4) + custom(6).
+  // Custom state (rgb5 + default_layer1) lives in the final 6 bytes, after
+  // layoutOptions; layoutOptions itself stays zero.
+  const size_t customBase = 48 + kMacroBytes + sizeof(uint32_t);  // 564
+  outPayload[customBase + 0] = payload[48 + srcMacroBytes + 0];  // brightness
+  outPayload[customBase + 1] = effect;                            // rgb.effect (migrated)
+  outPayload[customBase + 2] = payload[48 + srcMacroBytes + 2];  // speed
+  outPayload[customBase + 3] = payload[48 + srcMacroBytes + 3];  // hue
+  outPayload[customBase + 4] = payload[48 + srcMacroBytes + 4];  // saturation
+  outPayload[customBase + 5] = legacy ? 0 : payload[48 + srcMacroBytes + 5];  // default_layer
 
   outRecord[0] = (uint8_t)(kViaaMagic & 0xFF);
   outRecord[1] = (uint8_t)((kViaaMagic >> 8) & 0xFF);
@@ -1020,7 +1024,7 @@ class OsupadCallbacks : public via::Callbacks {
   }
 };
 
-static void applyRgb(const OsupadRgbState&) { rgb_render(); }
+static void applyRgb() { rgb_render(); }
 
 OsupadTransport transport;
 Stm32FlashMemory flashMemory;
