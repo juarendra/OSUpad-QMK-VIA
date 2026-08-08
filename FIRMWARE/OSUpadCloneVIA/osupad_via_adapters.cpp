@@ -146,3 +146,135 @@ bool OsupadCustomValue::loadState(const uint8_t* input, size_t length) {
 bool OsupadCustomValue::validateState(const uint8_t*, size_t length) const {
   return length == kCustomBytes;
 }
+
+namespace {
+void writeU32(uint8_t* p, uint32_t v) {
+  p[0] = (uint8_t)(v & 0xFF); p[1] = (uint8_t)((v >> 8) & 0xFF);
+  p[2] = (uint8_t)((v >> 16) & 0xFF); p[3] = (uint8_t)((v >> 24) & 0xFF);
+}
+uint32_t readU32(const uint8_t* p) {
+  return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+}  // namespace
+
+OsupadStorage::OsupadStorage(via::FlashMemory& flash, uint8_t* recordBuffer, size_t recordBytes)
+    : flash_(flash), buffer_(recordBuffer), bufferBytes_(recordBytes),
+      activeSlot_(kStoragePageA), provisionalSlot_(kStoragePageB),
+      activeValid_(false), provisionalReady_(false) {}
+
+bool OsupadStorage::validAt(uint32_t addr) const {
+  if (bufferBytes_ < kRecordSize) return false;
+  uint8_t header[kStateHeaderSize];
+  if (!flash_.read(addr, header, kStateHeaderSize)) return false;
+  if (readU32(header) != kViaaMagic) return false;
+  if (header[4] != (kViaaVersion & 0xFF) || header[5] != (uint8_t)(kViaaVersion >> 8)) return false;
+  if (header[6] != (uint8_t)(kPayloadBytes & 0xFF) || header[7] != (uint8_t)(kPayloadBytes >> 8)) return false;
+  if (!flash_.read(addr + kStateHeaderSize, buffer_, kPayloadBytes)) return false;
+  return osupadCrc32(buffer_, kPayloadBytes) == readU32(header + 8);
+}
+
+uint32_t OsupadStorage::osvpSequenceAt(uint32_t addr) const {
+  uint8_t header[kOsvpHeaderSize];
+  if (!flash_.read(addr, header, kOsvpHeaderSize)) return 0;
+  if (readU32(header) != kOsvpMagic) return 0;
+  return readU32(header + 8);
+}
+
+bool OsupadStorage::readRecord(uint32_t addr, uint8_t* out) const {
+  return flash_.read(addr, out, kRecordSize);
+}
+
+bool OsupadStorage::programRecord(uint32_t addr, const uint8_t* record) {
+  if (!flash_.erasePage(addr)) return false;
+  for (uint16_t off = 0; off < kRecordSize; off += 2) {
+    const uint8_t lo = record[off];
+    const uint8_t hi = off + 1 < kRecordSize ? record[off + 1] : 0xFF;
+    const uint16_t word = (uint16_t)lo | ((uint16_t)hi << 8);
+    if (!flash_.write(addr + off, &word, 2)) return false;
+  }
+  uint8_t verify[kRecordSize];
+  if (!readRecord(addr, verify)) return false;
+  if (memcmp(verify, record, kRecordSize) != 0) return false;
+  return true;
+}
+
+bool OsupadStorage::begin() {
+  const bool aValid = validAt(kStoragePageA);
+  const bool bValid = validAt(kStoragePageB);
+  if (aValid && bValid) {
+    activeSlot_ = kStoragePageA;
+    activeValid_ = true;
+    provisionalSlot_ = kStoragePageB;
+    return true;
+  }
+  if (aValid) { activeSlot_ = kStoragePageA; activeValid_ = true; provisionalSlot_ = kStoragePageB; return true; }
+  if (bValid) { activeSlot_ = kStoragePageB; activeValid_ = true; provisionalSlot_ = kStoragePageA; return true; }
+
+  // Migration: convert oldest-format record in either page to VIAA.
+  uint8_t oldRecord[16 + kOsvpPayloadV2];
+  const uint32_t seqA = osvpSequenceAt(kStoragePageA);
+  const uint32_t seqB = osvpSequenceAt(kStoragePageB);
+  if (seqA || seqB) {
+    const uint32_t oldAddr = (seqA >= seqB) ? kStoragePageA : kStoragePageB;
+    if (!readRecord(oldAddr, oldRecord)) return false;
+    const uint16_t ps = (uint16_t)(oldRecord[6] | (oldRecord[7] << 8));
+    size_t oldLen;
+    if (ps == kOsvpPayloadV2) oldLen = kOsvpHeaderSize + kOsvpPayloadV2;
+    else if (ps == kOsvpPayloadLegacy) oldLen = kOsvpHeaderSize + kOsvpPayloadLegacy;
+    else return false;
+    size_t outLen = 0;
+    if (!osupadConvertRecord(oldRecord, oldLen, buffer_, bufferBytes_, &outLen)) return false;
+    if (!programRecord(oldAddr, buffer_)) return false;
+    activeSlot_ = oldAddr;
+    provisionalSlot_ = (oldAddr == kStoragePageA) ? kStoragePageB : kStoragePageA;
+    activeValid_ = true;
+    provisionalReady_ = false;
+    return true;
+  }
+
+  activeValid_ = false;
+  return true;  // empty or corrupt flash: Protocol load() will fail -> resetBuffers()
+}
+
+size_t OsupadStorage::capacity() const { return kRecordSize; }
+
+bool OsupadStorage::read(size_t offset, uint8_t* output, size_t length) {
+  if (!activeValid_ || length == 0) return false;
+  if (offset > kRecordSize || length > kRecordSize - offset) return false;
+  return flash_.read(activeSlot_ + (uint32_t)offset, output, (uint16_t)length);
+}
+
+bool OsupadStorage::write(size_t offset, const uint8_t* input, size_t length) {
+  if (offset > kRecordSize || length > kRecordSize - offset) return false;
+  if (!provisionalReady_) {  // lazy provisional: Protocol.save() never calls erase()
+    provisionalSlot_ = (activeSlot_ == kStoragePageA) ? kStoragePageB : kStoragePageA;
+    memset(buffer_, 0, kRecordSize);
+    provisionalReady_ = true;
+  }
+  memcpy(buffer_ + offset, input, length);
+  return true;
+}
+
+bool OsupadStorage::erase() {
+  provisionalSlot_ = (activeSlot_ == kStoragePageA) ? kStoragePageB : kStoragePageA;
+  memset(buffer_, 0, kRecordSize);
+  provisionalReady_ = true;
+  return true;
+}
+
+bool OsupadStorage::commit() {
+  if (!provisionalReady_) return false;
+  if (!programRecord(provisionalSlot_, buffer_)) return false;
+  const uint32_t oldSlot = activeSlot_;
+  activeSlot_ = provisionalSlot_;
+  provisionalSlot_ = oldSlot;
+  // single valid slot: erase the previous active page so a boot can never
+  // face two valid records with different content.
+  if (!flash_.erasePage(oldSlot)) {
+    activeValid_ = false;
+    return false;
+  }
+  provisionalReady_ = false;
+  activeValid_ = true;
+  return true;
+}
