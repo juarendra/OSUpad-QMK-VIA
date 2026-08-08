@@ -86,3 +86,63 @@ bool osupadConvertRecord(const uint8_t* oldRecord, size_t oldLen,
   *outLen = kRecordSize;
   return true;
 }
+
+OsupadCustomValue::OsupadCustomValue(OsupadRgbState& rgb, uint8_t& defaultLayer,
+                                     void (*onApply)())
+    : rgb_(rgb), defaultLayer_(defaultLayer), onApply_(onApply) {}
+
+void OsupadCustomValue::apply() {
+  if (onApply_) onApply_();
+}
+
+bool OsupadCustomValue::set(uint8_t packet[via::kPacketSize]) {
+  if (packet[1] != 0x02) return false;
+  switch (packet[2]) {
+    case 0x01: rgb_.brightness = packet[3]; break;
+    case 0x02: rgb_.effect = packet[3]; break;
+    case 0x03: rgb_.speed = packet[3]; break;
+    case 0x04: rgb_.hue = packet[3]; rgb_.saturation = packet[4]; break;
+    default: return false;
+  }
+  apply();
+  return true;
+}
+
+bool OsupadCustomValue::get(uint8_t packet[via::kPacketSize]) {
+  if (packet[1] != 0x02) return false;
+  switch (packet[2]) {
+    case 0x01: packet[3] = rgb_.brightness; break;
+    case 0x02: packet[3] = rgb_.effect; break;
+    case 0x03: packet[3] = rgb_.speed; break;
+    case 0x04: packet[3] = rgb_.hue; packet[4] = rgb_.saturation; break;
+    default: return false;
+  }
+  return true;
+}
+
+bool OsupadCustomValue::saveState(uint8_t* output, size_t length) const {
+  if (length != kCustomBytes) return false;
+  output[0] = rgb_.brightness;
+  output[1] = rgb_.effect;
+  output[2] = rgb_.speed;
+  output[3] = rgb_.hue;
+  output[4] = rgb_.saturation;
+  output[5] = defaultLayer_;
+  return true;
+}
+
+bool OsupadCustomValue::loadState(const uint8_t* input, size_t length) {
+  if (length != kCustomBytes) return false;
+  rgb_.brightness = input[0];
+  rgb_.effect = input[1];
+  rgb_.speed = input[2];
+  rgb_.hue = input[3];
+  rgb_.saturation = input[4];
+  defaultLayer_ = input[5];
+  apply();
+  return true;
+}
+
+bool OsupadCustomValue::validateState(const uint8_t*, size_t length) const {
+  return length == kCustomBytes;
+}
