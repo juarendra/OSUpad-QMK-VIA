@@ -24,6 +24,12 @@ jobs:
       - name: Check out sources
         uses: actions/checkout@v4
 
+      - name: Check out VIA-Arduino
+        uses: actions/checkout@v4
+        with:
+          repository: juarendra/VIA-Arduino
+          path: via-arduino
+
       - name: Set up Arduino CLI
         uses: arduino/setup-arduino-cli@v2
 
@@ -51,6 +57,7 @@ jobs:
           arduino-cli compile \
             --fqbn stm32duino:STM32F1:genericSTM32F103C6:upload_method=STLinkMethod,cpu_speed=speed_72mhz,opt=osstd \
             --libraries "$RUNNER_TEMP/arduino-libraries" \
+            --libraries "$GITHUB_WORKSPACE/via-arduino" \
             --output-dir build \
             FIRMWARE/OSUpadCloneVIA
           test -f build/OSUpadCloneVIA.ino.bin
@@ -70,3 +77,22 @@ jobs:
             FIRMWARE/OSUpadCloneVIA/via-definition.json
             FIRMWARE/OSUpadCloneVIA/FLASH_STLINK.md
           if-no-files-found: error
+
+  port-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out VIA-Arduino
+        uses: actions/checkout@v4
+        with:
+          repository: juarendra/VIA-Arduino
+          path: via-arduino
+      - name: Build and run port tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          for t in tests/port/*_test.cpp; do
+            g++ -std=c++11 -Wall -Wextra -Werror -I via-arduino/src -I FIRMWARE/OSUpadCloneVIA \
+              "$t" FIRMWARE/OSUpadCloneVIA/osupad_via_adapters.cpp -o port_test
+            ./port_test
+          done
