@@ -14,13 +14,15 @@
 #include <USBComposite.h>
 #include <libmaple/gpio.h>
 
+#include <VIA_Protocol.h>
+#include "osupad_via_adapters.h"
+#include "stm32_flash_memory.h"
 #include "via_raw_hid.h"
 
 static const uint8_t KEY_COUNT = 6;
 static const uint8_t LAYER_COUNT = 4;
 static const uint8_t MACRO_COUNT = 16;
 static const uint16_t MACRO_BYTES = 512;
-static const uint16_t LEGACY_MACRO_BYTES = 192;
 static const uint8_t RGB_LED_COUNT = 8;
 static const uint8_t DEBOUNCE_MS = 5;
 static const uint8_t RAW_REPORT_BYTES = 32;
@@ -39,15 +41,14 @@ static const uint8_t SS_DOWN_CODE = 0x02;
 static const uint8_t SS_UP_CODE = 0x03;
 static const uint8_t SS_DELAY_CODE = 0x04;
 
-/* The generic F103C6 build reserves a 32 KiB application region.  These are
- * its final two 1 KiB pages.  The current binary is ~24 KiB, leaving more than
- * 6 KiB before these pages even if this particular clone exposes more flash. */
-static const uint32_t SETTINGS_PAGE_A = 0x08007800UL;
-static const uint32_t SETTINGS_PAGE_B = 0x08007C00UL;
-static const uint16_t SETTINGS_PAGE_BYTES = 1024;
-static const uint32_t SETTINGS_MAGIC = 0x4F535650UL;  // "OSVP"
-static const uint16_t SETTINGS_VERSION = 2;
-static const uint16_t SETTINGS_V1_VERSION = 1;
+/* The generic F103C6 build reserves a 32 KiB application region.  The
+ * settings pages live at the top of it and are handled by OsupadStorage. */
+static bool local_dirty = false;
+static uint32_t local_save_at = 0;
+static void markLocalDirty() {
+  local_dirty = true;
+  local_save_at = millis() + SETTINGS_SAVE_DELAY_MS;
+}
 
 static const uint8_t key_pins[KEY_COUNT] = {PB0, PA7, PA6, PB12, PB13, PB14};
 
@@ -102,235 +103,20 @@ static uint8_t mouse_acceleration = 1;
 static uint32_t last_mouse_report = 0;
 
 /* QMK keycodes, stored in the same big-endian order returned by VIA. */
-static uint16_t keymap[LAYER_COUNT][KEY_COUNT];
-static const uint16_t default_keymap[LAYER_COUNT][KEY_COUNT] = {
-    {0x0004, 0x0005, 0x0006, 0x0008, 0x0009, 0x000A}, // A B C E F G
-    {0x0014, 0x001A, 0x001B, 0x001D, 0x001C, 0x0018}, // Q W X Z Y U
-    {0x7700, 0x7701, 0x7702, 0x7703, 0x7704, 0x7705}, // QMK Macro 0..5
-    {0x004F, 0x0050, 0x0051, 0x0052, 0x002C, 0x0029}, // arrows, space, esc
+static uint16_t keymap[LAYER_COUNT * KEY_COUNT];
+static const uint16_t default_keymap[LAYER_COUNT * KEY_COUNT] = {
+    0x0004, 0x0005, 0x0006, 0x0008, 0x0009, 0x000A, // A B C E F G
+    0x0014, 0x001A, 0x001B, 0x001D, 0x001C, 0x0018, // Q W X Z Y U
+    0x7700, 0x7701, 0x7702, 0x7703, 0x7704, 0x7705, // QMK Macro 0..5
+    0x004F, 0x0050, 0x0051, 0x0052, 0x002C, 0x0029, // arrows, space, esc
 };
 static uint8_t macro_buffer[MACRO_BYTES];
 
-struct RgbState {
-  uint8_t brightness;
-  uint8_t effect;
-  uint8_t speed;
-  uint8_t hue;
-  uint8_t saturation;
-};
-static const RgbState default_rgb = {48, 1, 80, 0, 255};
-static RgbState rgb = default_rgb;
+static OsupadRgbState rgb = {48, 1, 80, 0, 255};
+static const OsupadRgbState default_rgb = {48, 1, 80, 0, 255};
 static uint32_t last_rgb_frame = 0;
 static uint8_t last_rgb_effect = 1;
 static bool device_indication = false;
-
-struct PersistentPayload {
-  uint16_t keymap[LAYER_COUNT][KEY_COUNT];
-  uint8_t macro_buffer[MACRO_BYTES];
-  RgbState rgb;
-  /* Occupies the alignment byte that was previously unused, preserving the
-   * serialized payload size of existing settings records. */
-  uint8_t default_layer;
-};
-
-/* Version-1 releases used a 192-byte macro area. Keep this exact layout so
- * an installed device can migrate its saved map, macros, and RGB state. */
-struct LegacyPersistentPayload {
-  uint16_t keymap[LAYER_COUNT][KEY_COUNT];
-  uint8_t macro_buffer[LEGACY_MACRO_BYTES];
-  RgbState rgb;
-};
-
-struct PersistentImage {
-  uint32_t magic;
-  uint16_t version;
-  uint16_t payload_size;
-  uint32_t sequence;
-  uint32_t crc32;
-  PersistentPayload payload;
-};
-
-struct LegacyPersistentImage {
-  uint32_t magic;
-  uint16_t version;
-  uint16_t payload_size;
-  uint32_t sequence;
-  uint32_t crc32;
-  LegacyPersistentPayload payload;
-};
-
-static_assert(sizeof(PersistentImage) <= SETTINGS_PAGE_BYTES,
-              "persistent settings exceed reserved flash page");
-static_assert((sizeof(PersistentImage) & 1U) == 0,
-              "persistent settings must be programmable as half-words");
-static uint32_t settings_sequence = 0;
-static uint32_t settings_active_page = 0;
-static bool settings_dirty = false;
-static uint32_t settings_save_at = 0;
-
-static uint32_t crc32(const uint8_t *data, uint16_t size) {
-  uint32_t crc = 0xFFFFFFFFUL;
-  while (size--) {
-    crc ^= *data++;
-    for (uint8_t bit = 0; bit < 8; ++bit)
-      crc = (crc >> 1) ^ (0xEDB88320UL & (-(int32_t)(crc & 1)));
-  }
-  return ~crc;
-}
-
-static bool settings_image_valid(const PersistentImage *image) {
-  return image->magic == SETTINGS_MAGIC &&
-         image->version == SETTINGS_VERSION &&
-         image->payload_size == sizeof(PersistentPayload) &&
-         image->crc32 == crc32(reinterpret_cast<const uint8_t *>(&image->payload),
-                               sizeof(image->payload));
-}
-
-/* Version 1 already used the 512-byte payload, but stored compact clone RGB
- * mode numbers. Keep it readable so an update preserves the user's map,
- * macros, and lighting state. */
-static bool settings_v1_image_valid(const PersistentImage *image) {
-  return image->magic == SETTINGS_MAGIC &&
-         image->version == SETTINGS_V1_VERSION &&
-         image->payload_size == sizeof(PersistentPayload) &&
-         image->crc32 == crc32(reinterpret_cast<const uint8_t *>(&image->payload),
-                               sizeof(image->payload));
-}
-
-static bool legacy_settings_image_valid(const LegacyPersistentImage *image) {
-  return image->magic == SETTINGS_MAGIC &&
-         image->version == SETTINGS_V1_VERSION &&
-         image->payload_size == sizeof(LegacyPersistentPayload) &&
-         image->crc32 == crc32(reinterpret_cast<const uint8_t *>(&image->payload),
-                               sizeof(image->payload));
-}
-
-static uint8_t migrate_v1_rgb_effect(uint8_t effect) {
-  /* V1 used 1..10 as a compact set. Version 2 uses QMK RGBLight mode IDs. */
-  switch (effect) {
-    case 0: return 0;
-    case 1: return 1;   // static
-    case 2: return 2;   // breathing
-    case 3: return 6;   // rainbow mood
-    case 4: return 9;   // rainbow swirl
-    case 5: return 15;  // snake
-    case 6: return 21;  // knight
-    case 7: return 24;  // Christmas
-    case 8: return 25;  // static gradient
-    case 9: return 35;  // RGB test
-    case 10: return 37; // twinkle
-    default: return 1;
-  }
-}
-
-static void settings_load() {
-  const PersistentImage *a = reinterpret_cast<const PersistentImage *>(SETTINGS_PAGE_A);
-  const PersistentImage *b = reinterpret_cast<const PersistentImage *>(SETTINGS_PAGE_B);
-  const bool a_valid = settings_image_valid(a);
-  const bool b_valid = settings_image_valid(b);
-  const PersistentImage *chosen = nullptr;
-  if (a_valid && (!b_valid || a->sequence >= b->sequence)) {
-    chosen = a;
-    settings_active_page = SETTINGS_PAGE_A;
-  } else if (b_valid) {
-    chosen = b;
-    settings_active_page = SETTINGS_PAGE_B;
-  }
-  if (chosen != nullptr) {
-    memcpy(keymap, chosen->payload.keymap, sizeof(keymap));
-    memcpy(macro_buffer, chosen->payload.macro_buffer, sizeof(macro_buffer));
-    rgb = chosen->payload.rgb;
-    default_layer = chosen->payload.default_layer < LAYER_COUNT ? chosen->payload.default_layer : 0;
-    last_rgb_effect = rgb.effect != 0 ? rgb.effect : 1;
-    settings_sequence = chosen->sequence;
-    return;
-  }
-
-  const PersistentImage *v1_a = reinterpret_cast<const PersistentImage *>(SETTINGS_PAGE_A);
-  const PersistentImage *v1_b = reinterpret_cast<const PersistentImage *>(SETTINGS_PAGE_B);
-  const bool v1_a_valid = settings_v1_image_valid(v1_a);
-  const bool v1_b_valid = settings_v1_image_valid(v1_b);
-  const PersistentImage *v1 = nullptr;
-  if (v1_a_valid && (!v1_b_valid || v1_a->sequence >= v1_b->sequence)) {
-    v1 = v1_a;
-    settings_active_page = SETTINGS_PAGE_A;
-  } else if (v1_b_valid) {
-    v1 = v1_b;
-    settings_active_page = SETTINGS_PAGE_B;
-  }
-  if (v1 != nullptr) {
-    memcpy(keymap, v1->payload.keymap, sizeof(keymap));
-    memcpy(macro_buffer, v1->payload.macro_buffer, sizeof(macro_buffer));
-    rgb = v1->payload.rgb;
-    rgb.effect = migrate_v1_rgb_effect(rgb.effect);
-    last_rgb_effect = rgb.effect != 0 ? rgb.effect : 1;
-    default_layer = v1->payload.default_layer < LAYER_COUNT ? v1->payload.default_layer : 0;
-    settings_sequence = v1->sequence;
-    settings_dirty = true;
-    settings_save_at = millis() + SETTINGS_SAVE_DELAY_MS;
-    return;
-  }
-
-  const LegacyPersistentImage *legacy_a = reinterpret_cast<const LegacyPersistentImage *>(SETTINGS_PAGE_A);
-  const LegacyPersistentImage *legacy_b = reinterpret_cast<const LegacyPersistentImage *>(SETTINGS_PAGE_B);
-  const bool legacy_a_valid = legacy_settings_image_valid(legacy_a);
-  const bool legacy_b_valid = legacy_settings_image_valid(legacy_b);
-  const LegacyPersistentImage *legacy = nullptr;
-  if (legacy_a_valid && (!legacy_b_valid || legacy_a->sequence >= legacy_b->sequence)) legacy = legacy_a;
-  else if (legacy_b_valid) legacy = legacy_b;
-  if (legacy != nullptr) {
-    memcpy(keymap, legacy->payload.keymap, sizeof(keymap));
-    memset(macro_buffer, 0, sizeof(macro_buffer));
-    memcpy(macro_buffer, legacy->payload.macro_buffer, LEGACY_MACRO_BYTES);
-    rgb = legacy->payload.rgb;
-    rgb.effect = migrate_v1_rgb_effect(rgb.effect);
-    last_rgb_effect = rgb.effect != 0 ? rgb.effect : 1;
-    default_layer = 0;
-    settings_sequence = legacy->sequence;
-    /* Commit the enlarged record after USB has had time to enumerate. */
-    settings_dirty = true;
-    settings_save_at = millis() + SETTINGS_SAVE_DELAY_MS;
-  }
-}
-
-static bool settings_commit() {
-  PersistentImage image = {};
-  image.magic = SETTINGS_MAGIC;
-  image.version = SETTINGS_VERSION;
-  image.payload_size = sizeof(PersistentPayload);
-  image.sequence = settings_sequence + 1;
-  memcpy(image.payload.keymap, keymap, sizeof(keymap));
-  memcpy(image.payload.macro_buffer, macro_buffer, sizeof(macro_buffer));
-  image.payload.rgb = rgb;
-  image.payload.default_layer = default_layer;
-  image.crc32 = crc32(reinterpret_cast<const uint8_t *>(&image.payload),
-                      sizeof(image.payload));
-
-  const uint32_t target_page = settings_active_page == SETTINGS_PAGE_A
-                                   ? SETTINGS_PAGE_B : SETTINGS_PAGE_A;
-  bool ok = true;
-  noInterrupts();
-  FLASH_Unlock();
-  if (FLASH_ErasePage(target_page) != FLASH_COMPLETE) ok = false;
-  const uint8_t *bytes = reinterpret_cast<const uint8_t *>(&image);
-  for (uint16_t offset = 0; ok && offset < sizeof(image); offset += 2) {
-    const uint16_t word = bytes[offset] | ((uint16_t)bytes[offset + 1] << 8);
-    if (FLASH_ProgramHalfWord(target_page + offset, word) != FLASH_COMPLETE) ok = false;
-  }
-  FLASH_Lock();
-  interrupts();
-  const PersistentImage *written = reinterpret_cast<const PersistentImage *>(target_page);
-  if (!ok || !settings_image_valid(written) || written->sequence != image.sequence) return false;
-  settings_active_page = target_page;
-  settings_sequence = image.sequence;
-  settings_dirty = false;
-  return true;
-}
-
-static void settings_mark_dirty() {
-  settings_dirty = true;
-  settings_save_at = millis() + SETTINGS_SAVE_DELAY_MS;
-}
 
 static void ws2812_delay(uint8_t cycles) {
   while (cycles--) {
@@ -439,7 +225,7 @@ static void rgb_set_effect(uint8_t effect) {
   rgb.effect = rgb_effect_valid(effect) ? effect : 1;
   if (effect != 0) last_rgb_effect = effect;
   rgb_render();
-  settings_mark_dirty();
+  markLocalDirty();
 }
 
 static void rgb_adjust(uint8_t *value, int16_t delta) {
@@ -481,16 +267,8 @@ static bool process_rgb_keycode(uint16_t keycode, bool pressed) {
   }
   if (rgb.effect != 0) last_rgb_effect = rgb.effect;
   rgb_render();
-  settings_mark_dirty();
+  markLocalDirty();
   return true;
-}
-
-static void keymap_reset() {
-  memcpy(keymap, default_keymap, sizeof(keymap));
-}
-
-static void macro_reset() {
-  memset(macro_buffer, 0, sizeof(macro_buffer));
 }
 
 /* USBComposite accepts ordinary keys in Arduino's 0x88-based form and
@@ -738,10 +516,10 @@ static void send_modifiers(uint8_t mods, bool pressed) {
 static uint16_t resolved_keycode(uint8_t key) {
   for (int8_t layer = LAYER_COUNT - 1; layer >= 0; --layer) {
     if ((layer_state & (1U << layer)) == 0) continue;
-    const uint16_t keycode = keymap[layer][key];
+    const uint16_t keycode = keymap[layer * KEY_COUNT + key];
     if (keycode != 0x0001) return keycode; // KC_TRNS
   }
-  return keymap[default_layer][key];
+  return keymap[default_layer * KEY_COUNT + key];
 }
 
 static bool is_tap_hold_keycode(uint16_t keycode) {
@@ -798,7 +576,7 @@ static void send_keycode(uint16_t keycode, bool pressed) {
   if (keycode >= 0x52E0 && keycode <= 0x52FF) { // PDF(layer)
     if (pressed && (keycode & 0x1F) < LAYER_COUNT) {
       default_layer = keycode & 0x1F;
-      settings_mark_dirty();
+      markLocalDirty();
     }
     return;
   }
@@ -907,166 +685,44 @@ static void process_key(uint8_t key, bool pressed) {
   }
 }
 
-static void copy_keymap_to_buffer(uint16_t offset, uint8_t size, uint8_t *out) {
-  const uint16_t bytes = sizeof(keymap);
-  for (uint8_t i = 0; i < size; ++i) {
-    const uint16_t index = offset + i;
-    if (index >= bytes) {
-      out[i] = 0;
-      continue;
-    }
-    const uint16_t keycode = keymap[index / 2 / KEY_COUNT][(index / 2) % KEY_COUNT];
-    out[i] = (index & 1) ? keycode : keycode >> 8;
+// --- VIA-Arduino protocol wiring ---
+class OsupadCallbacks : public via::Callbacks {
+ public:
+  uint32_t matrixRow(uint8_t row) const override {
+    if (row >= 2) return 0;
+    return (stable_state[row * 3] ? 1 : 0) |
+           (stable_state[row * 3 + 1] ? 2 : 0) |
+           (stable_state[row * 3 + 2] ? 4 : 0);
   }
-}
+  void deviceIndication(uint8_t) override {
+    device_indication = !device_indication;
+    rgb_render();
+  }
+};
 
-static void copy_buffer_to_keymap(uint16_t offset, uint8_t size, const uint8_t *in) {
-  const uint16_t bytes = sizeof(keymap);
-  for (uint8_t i = 0; i < size; ++i) {
-    const uint16_t index = offset + i;
-    if (index >= bytes) continue;
-    uint16_t &keycode = keymap[index / 2 / KEY_COUNT][(index / 2) % KEY_COUNT];
-    keycode = (index & 1) ? (keycode & 0xFF00) | in[i]
-                          : ((uint16_t)in[i] << 8) | (keycode & 0x00FF);
-  }
-  settings_mark_dirty();
-}
+static void applyRgb() { rgb_render(); }
 
-/* VIA protocol v13 uses the QMK custom-value command layout:
- * [command, channel, value, value-data...].  Channel 2 is qmk_rgblight.
- * This matches the V3 definition's `qmk_rgblight` menu. */
-static bool via_set_rgblight(const uint8_t *data) {
-  if (data[1] != 0x02) return false;
-  switch (data[2]) {
-    case 0x01: rgb.brightness = data[3]; break;
-    case 0x02:
-      if (!rgb_effect_valid(data[3])) return false;
-      rgb.effect = data[3];
-      if (rgb.effect != 0) last_rgb_effect = rgb.effect;
-      break;
-    case 0x03: rgb.speed = data[3]; break;
-    case 0x04: rgb.hue = data[3]; rgb.saturation = data[4]; break;
-    default: return false;
-  }
-  rgb_render();
-  settings_mark_dirty();
-  return true;
-}
+OsupadTransport transport;
+Stm32FlashMemory flashMemory;
+static uint8_t storageBuffer[kRecordSize];
+OsupadStorage storage(flashMemory, storageBuffer, sizeof(storageBuffer));
+static uint8_t loadBuffer[kPayloadBytes];
+OsupadCustomValue customValue(rgb, default_layer, &applyRgb);
+OsupadCallbacks callbacks;
 
-static bool via_get_rgblight(uint8_t *data) {
-  if (data[1] != 0x02) return false;
-  switch (data[2]) {
-    case 0x01: data[3] = rgb.brightness; break;
-    case 0x02: data[3] = rgb.effect; break;
-    case 0x03: data[3] = rgb.speed; break;
-    case 0x04: data[3] = rgb.hue; data[4] = rgb.saturation; break;
-    default: return false;
-  }
-  return true;
-}
+via::Config protocolConfig = via::Config(
+    2, 3, LAYER_COUNT, keymap, default_keymap,
+    macro_buffer, MACRO_BYTES, MACRO_COUNT, 1, SETTINGS_SAVE_DELAY_MS,
+    0, 0, nullptr, nullptr,
+    loadBuffer, sizeof(loadBuffer), true, true, false);
 
-/* VIA protocol v13 command subset. It returns the same 32-byte packet given
- * by the host, as QMK's raw_hid_receive() does. */
-static void handle_via(uint8_t *data) {
-  switch (data[0]) {
-    case 0x01: data[1] = 0x00; data[2] = 0x0D; break; // protocol v13 / VIA V3
-    case 0x02: // keyboard value
-      if (data[1] == 0x01) {
-        const uint32_t up = millis();
-        data[2] = up >> 24; data[3] = up >> 16; data[4] = up >> 8; data[5] = up;
-      } else if (data[1] == 0x02) { // layout options: none on this fixed layout
-        data[2] = data[3] = data[4] = data[5] = 0;
-      } else if (data[1] == 0x03) {
-        const uint8_t row_offset = data[2];
-        if (row_offset < 2) data[3] = (stable_state[row_offset * 3] ? 1 : 0) |
-                                      (stable_state[row_offset * 3 + 1] ? 2 : 0) |
-                                      (stable_state[row_offset * 3 + 2] ? 4 : 0);
-        if (row_offset + 1 < 2) data[4] = (stable_state[(row_offset + 1) * 3] ? 1 : 0) |
-                                          (stable_state[(row_offset + 1) * 3 + 1] ? 2 : 0) |
-                                          (stable_state[(row_offset + 1) * 3 + 2] ? 4 : 0);
-      } else if (data[1] == 0x04) { // firmware version, matching the V3 definition
-        data[2] = data[3] = data[4] = 0; data[5] = 1;
-      } else if (data[1] == 0x06) { // QMK keycodes version 0.0.8
-        data[2] = data[3] = data[4] = 0; data[5] = 8;
-      } else data[0] = 0xFF;
-      break;
-    case 0x03: // set keyboard value
-      if (data[1] == 0x05) { // VIA selects the device: flash LEDs six times
-        device_indication = !device_indication;
-        rgb_render();
-      } else if (data[1] != 0x02) data[0] = 0xFF;
-      break;
-    case 0x04: { // get keycode: layer, row, column
-      const uint8_t layer = data[1], row = data[2], column = data[3];
-      const uint8_t key = row * 3 + column;
-      const uint16_t code = layer < LAYER_COUNT && key < KEY_COUNT ? keymap[layer][key] : 0;
-      data[4] = code >> 8; data[5] = code;
-      break;
-    }
-    case 0x05: { // set keycode
-      const uint8_t layer = data[1], row = data[2], column = data[3];
-      const uint8_t key = row * 3 + column;
-      if (layer < LAYER_COUNT && key < KEY_COUNT) {
-        keymap[layer][key] = ((uint16_t)data[4] << 8) | data[5];
-        settings_mark_dirty();
-      }
-      break;
-    }
-    case 0x06: keymap_reset(); settings_mark_dirty(); break;
-    case 0x07: if (!via_set_rgblight(data)) data[0] = 0xFF; break;
-    case 0x08: if (!via_get_rgblight(data)) data[0] = 0xFF; break;
-    case 0x09:
-      if (data[1] != 0x02 || !settings_commit()) data[0] = 0xFF;
-      break;
-    case 0x0A:
-      keymap_reset();
-      macro_reset();
-      rgb = default_rgb;
-      last_rgb_effect = rgb.effect;
-      default_layer = 0;
-      layer_state = 0;
-      settings_mark_dirty();
-      rgb_render();
-      break;
-    case 0x0C: data[1] = MACRO_COUNT; break;
-    case 0x0D: data[1] = MACRO_BYTES >> 8; data[2] = MACRO_BYTES; break;
-    case 0x0E: {
-      const uint16_t offset = ((uint16_t)data[1] << 8) | data[2];
-      const uint8_t size = data[3] > 28 ? 28 : data[3];
-      for (uint8_t i = 0; i < size; ++i) data[4 + i] = offset + i < MACRO_BYTES ? macro_buffer[offset + i] : 0;
-      break;
-    }
-    case 0x0F: {
-      const uint16_t offset = ((uint16_t)data[1] << 8) | data[2];
-      const uint8_t size = data[3] > 28 ? 28 : data[3];
-      for (uint8_t i = 0; i < size; ++i) if (offset + i < MACRO_BYTES) macro_buffer[offset + i] = data[4 + i];
-      settings_mark_dirty();
-      break;
-    }
-    case 0x10: macro_reset(); settings_mark_dirty(); break;
-    case 0x11: data[1] = LAYER_COUNT; break;
-    case 0x12: {
-      const uint16_t offset = ((uint16_t)data[1] << 8) | data[2];
-      copy_keymap_to_buffer(offset, data[3] > 28 ? 28 : data[3], &data[4]);
-      break;
-    }
-    case 0x13: {
-      const uint16_t offset = ((uint16_t)data[1] << 8) | data[2];
-      copy_buffer_to_keymap(offset, data[3] > 28 ? 28 : data[3], &data[4]);
-      break;
-    }
-    default: data[0] = 0xFF; break;
-  }
-  via_raw_hid_send(data);
-}
+via::Protocol protocol(protocolConfig, transport, &storage, &customValue, &callbacks);
 
 void setup() {
-  keymap_reset();
-  macro_reset();
-  settings_load();
   pinMode(PA5, OUTPUT);
   digitalWrite(PA5, LOW);
   rgb_render();
+  protocol.begin(millis());
 
   for (uint8_t i = 0; i < KEY_COUNT; ++i) {
     pinMode(key_pins[i], INPUT_PULLUP);
@@ -1091,8 +747,7 @@ void setup() {
 }
 
 void loop() {
-  uint8_t report[RAW_REPORT_BYTES];
-  if (via_raw_hid_receive(report)) handle_via(report);
+  protocol.task(millis());
 
   const uint32_t now = millis();
   for (uint8_t i = 0; i < KEY_COUNT; ++i) {
@@ -1121,10 +776,8 @@ void loop() {
     }
   }
 
-  if (settings_dirty && (int32_t)(now - settings_save_at) >= 0 &&
-      !settings_commit()) {
-    /* A bad SWD/flash condition must not erase the settings page continuously
-     * in the main loop. Keep the last complete page and retry at a sane rate. */
-    settings_save_at = now + SETTINGS_RETRY_DELAY_MS;
+  if (local_dirty && (int32_t)(now - local_save_at) >= 0) {
+    if (protocol.save()) local_dirty = false;
+    else local_save_at = now + SETTINGS_RETRY_DELAY_MS;
   }
 }

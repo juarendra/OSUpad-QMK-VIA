@@ -12,3 +12,11 @@
 bool via_raw_hid_register();
 bool via_raw_hid_receive(uint8_t *data);
 bool via_raw_hid_send(const uint8_t *data);
+
+#include "VIA_Protocol.h"
+
+class OsupadTransport : public via::Transport {
+ public:
+  bool receive(uint8_t packet[via::kPacketSize]) override { return via_raw_hid_receive(packet); }
+  bool send(const uint8_t packet[via::kPacketSize]) override { return via_raw_hid_send(packet); }
+};

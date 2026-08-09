@@ -52,10 +52,11 @@ def main() -> None:
     sketch = sketch_path.read_text(encoding="utf-8")
     for token in (
         "MACRO_BYTES = 512",
-        "LEGACY_MACRO_BYTES = 192",
-        "SETTINGS_PAGE_A = 0x08007800UL",
-        "SETTINGS_PAGE_B = 0x08007C00UL",
-        "static_assert(sizeof(PersistentImage) <= SETTINGS_PAGE_BYTES",
+        "#include <VIA_Protocol.h>",
+        "via::Protocol protocol(protocolConfig",
+        "protocol.task(millis())",
+        "OsupadStorage storage(",
+        "OsupadCustomValue customValue(",
         "0x29, 0x08",  # Mouse report exposes all eight QMK mouse buttons.
         "0x0A, 0x38, 0x02",  # Consumer AC Pan for horizontal scroll.
         "HID_CONSUMER_REPORT_DESCRIPTOR()",
@@ -68,9 +69,8 @@ def main() -> None:
         "usage == 0xA5) bit = 1",  # KC_PWR
         "case 0x7833: rgb.effect = 35",  # QMK RGB test mode
         "case 0x7834: rgb.effect = 37",  # QMK twinkle mode
-        "case 0x0D: data[1] = MACRO_BYTES >> 8; data[2] = MACRO_BYTES",
-        "case 0x0E: {",
-        "case 0x0F: {",
+        "macro_buffer[MACRO_BYTES - 1] != 0",  # interrupted-write guard
+        "resolved_keycode(uint8_t key)",
     ):
         require(sketch, token, sketch_path)
 
@@ -82,6 +82,24 @@ def main() -> None:
         "USB_EP_TYPE_INTERRUPT",
     ):
         require(raw, token, raw_path)
+
+    adapters_path = FIRMWARE / "osupad_via_adapters.cpp"
+    adapters = adapters_path.read_text(encoding="utf-8")
+    for token in (
+        "kOsvpMagic",       # OSVP migration
+        "osupadConvertRecord",
+        "kViaaMagic",
+        "single valid slot",
+    ):
+        require(adapters, token, adapters_path)
+
+    storage_path = FIRMWARE / "osupad_via_adapters.h"
+    storage_h = storage_path.read_text(encoding="utf-8")
+    for token in ("kViaaMagic = 0x56494141UL", "kOsvpMagic = 0x4F535650UL",
+                  "0x08007800UL",     # settings page A
+                  "0x08007C00UL",     # settings page B
+                  "class OsupadStorage", "class OsupadCustomValue"):
+        require(storage_h, token, storage_path)
 
     print("OSUpad Clone VIA contract: PASS")
     print("  VIA: 0x7877:0x1004, V3 definition, 2x3 matrix")
