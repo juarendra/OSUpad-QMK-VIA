@@ -700,7 +700,10 @@ class OsupadCallbacks : public via::Callbacks {
   }
 };
 
-static void applyRgb() { rgb_render(); }
+static void applyRgb() {
+  if (rgb.effect != 0) last_rgb_effect = rgb.effect;
+  rgb_render();
+}
 
 OsupadTransport transport;
 Stm32FlashMemory flashMemory;
