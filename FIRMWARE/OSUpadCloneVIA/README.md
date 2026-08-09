@@ -4,15 +4,25 @@ Firmware rilis untuk OSUpad STM32F103 clone. Jalur USB STM32duino/libmaple
 dipakai karena telah terbukti stabil pada clone ini, sementara jalur USB
 QMK/ChibiOS tidak kompatibel pada sebagian chip clone.
 
+## Dependensi
+
+Firmware ini memakai library [VIA-Arduino](https://github.com/juarendra/VIA-Arduino)
+(versi rilis terbaru) untuk penanganan protocol VIA v13. Install library di
+folder `libraries` Arduino IDE, atau build dengan `arduino-cli compile
+--libraries <path-ke-VIA-Arduino>`. Lapisan board (USB libmaple/USBComposite,
+keyboard/mouse/RGB, dan storage flash) tetap milik firmware ini.
+
 ## Kemampuan
 
-- VIA protocol v13 dengan `via-definition.json` berformat VIA V3.
-- Empat layer editable, 16 macro dinamis (512 byte), dan aksi layer `MO`,
-  `LM`, `LT`, `TT`, `TO`, `TG`, `DF`, `PDF`, `OSL`, serta `OSM`.
+- VIA protocol v13 via library VIA-Arduino (`via::Protocol`) dengan
+  `via-definition.json` berformat VIA V3.
+- Empat layer editable, 16 macro dinamis (512 byte), aksi layer MO, LM, LT, TT,
+  TO, TG, DF, PDF, OSL, OSM.
 - Delapan WS2812 pada PA5, keyboard, mouse delapan tombol dan scroll dua arah,
-  consumer/media, serta system-control HID.
-- Penyimpanan keymap, macro, RGB, dan default layer secara redundant dengan
-  CRC di dua halaman flash terakhir (`0x08007800` dan `0x08007C00`).
+  consumer/media, system-control HID.
+- Penyimpanan keymap, macro, RGB, dan default layer di dua halaman flash
+  terakhir (`0x08007800`/`0x08007C00`). Settings lama (format OSVP) dimigrasi
+  otomatis saat update firmware.
 
 Sesudah mengubah pengaturan VIA, tunggu sekitar satu detik sebelum mencabut
 USB. Firmware tidak mengubah BOOT strap, Option Bytes, read-out protection,

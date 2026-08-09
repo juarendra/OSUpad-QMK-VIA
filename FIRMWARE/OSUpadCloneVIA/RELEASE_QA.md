@@ -4,9 +4,11 @@
 
 - Arduino build: `stm32duino:STM32F1:genericSTM32F103C6`, ST-Link method,
   72 MHz, size optimization.
-- Latest local build size: 24,924 / 32,768 bytes flash; 4,616 / 10,240 bytes
-  RAM. The GitHub Actions job rejects any binary above 30,720 bytes, preserving
-  the final two 1 KiB settings pages.
+- Latest build size: 28,264 / 32,768 bytes flash; 4,616 / 10,240 bytes RAM.
+  The GitHub Actions job rejects any binary above 30,720 bytes, preserving the
+  final two 1 KiB settings pages.
+- VIA protocol handled by `via::Protocol` from VIA-Arduino; storage is
+  dual-page single-valid-slot with OSVP→VIAA migration.
 - VIA definition: validated as `KeyboardDefinitionV3`; VID `0x7877`, PID
   `0x1004`, firmware version `1`, six matrix keys.
 - USB topology: Windows enumerates keyboard interface `MI_00` and separate

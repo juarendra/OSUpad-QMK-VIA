@@ -27,9 +27,11 @@ Unduh `OSUpadCloneVIA.ino.bin` dari
   ```
 
 Build rilis hanya memakai 30 KiB pertama. Dua halaman 1 KiB terakhir
-(`0x08007800` dan `0x08007C00`) menyimpan setting VIA. Saat update, gunakan
-erase halaman yang diperlukan bila ingin mempertahankan setting. **Mass Erase**
-sengaja menghapus seluruh flash, termasuk keymap, macro, dan RGB tersimpan.
+(`0x08007800` dan `0x08007C00`) menyimpan setting VIA dalam format VIA-Arduino
+(`StateHeader` + payload). Saat update dari firmware rilis lama, settings
+otomatis dimigrasi dari format OSVP. Saat update, gunakan erase halaman yang
+diperlukan bila ingin mempertahankan setting. **Mass Erase** sengaja menghapus
+seluruh flash, termasuk keymap, macro, dan RGB tersimpan.
 
 ## Uji USB dan VIA pertama
 
