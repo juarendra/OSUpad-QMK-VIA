@@ -23,14 +23,33 @@ int main() {
   assert(cv.set(p));
   assert(rgb.hue == 10 && rgb.saturation == 200);
   assert(applyCount == 3);
-  p[2] = 0x99;                                        // unknown channel -> reject
+  p[2] = 0x99;                                        // unknown command -> reject
   assert(!cv.set(p));
+
+  // VIA v3 (usevia.app) qmk_rgblight form: command in packet[1]
+  memset(p, 0, sizeof(p));
+  p[0] = 0x07; p[1] = 0x80; p[2] = 77;               // brightness 77
+  assert(cv.set(p));
+  assert(rgb.brightness == 77);
+  p[1] = 0x81; p[2] = 15;                            // effect 15
+  assert(cv.set(p));
+  assert(rgb.effect == 15);
+  p[1] = 0x82; p[2] = 120;                           // speed 120
+  assert(cv.set(p));
+  assert(rgb.speed == 120);
+  p[1] = 0x83; p[2] = 30; p[3] = 180;                // hue/saturation
+  assert(cv.set(p));
+  assert(rgb.hue == 30 && rgb.saturation == 180);
+  assert(applyCount == 7);
 
   // get
   memset(p, 0, sizeof(p));
-  p[0] = 0x08; p[1] = 0x02; p[2] = 0x01;
+  p[0] = 0x08; p[1] = 0x80;
   assert(cv.get(p));
-  assert(p[3] == 42);
+  assert(p[2] == 77);
+  p[0] = 0x08; p[1] = 0x83;
+  assert(cv.get(p));
+  assert(p[2] == 30 && p[3] == 180);
 
   // save/load round trip
   rgb = {1, 2, 3, 4, 5};

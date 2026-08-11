@@ -96,12 +96,24 @@ void OsupadCustomValue::apply() {
 }
 
 bool OsupadCustomValue::set(uint8_t packet[via::kPacketSize]) {
-  if (packet[1] != 0x01 && packet[1] != 0x02) return false;
-  switch (packet[2]) {
-    case 0x01: rgb_.brightness = packet[3]; break;
-    case 0x02: rgb_.effect = packet[3]; break;
-    case 0x03: rgb_.speed = packet[3]; break;
-    case 0x04: rgb_.hue = packet[3]; rgb_.saturation = packet[4]; break;
+  // VIA v3 (usevia.app) sends qmk_rgblight as command 0x80..0x83 in
+  // packet[1]: [0x07, 0x80, val], [0x07, 0x81, val], [0x07, 0x82, val],
+  // [0x07, 0x83, hue, sat].  Legacy channel form uses packet[1] as the
+  // channel (0x01/0x02) and packet[2] as the command.  Accept both.
+  const bool v3Form = packet[1] >= 0x80;
+  const uint8_t command = v3Form ? packet[1] : packet[2];
+  switch (command) {
+    case 0x80:
+    case 0x01: rgb_.brightness = packet[v3Form ? 2 : 3]; break;
+    case 0x81:
+    case 0x02: rgb_.effect = packet[v3Form ? 2 : 3]; break;
+    case 0x82:
+    case 0x03: rgb_.speed = packet[v3Form ? 2 : 3]; break;
+    case 0x83:
+    case 0x04:
+      rgb_.hue = packet[v3Form ? 2 : 3];
+      rgb_.saturation = packet[v3Form ? 3 : 4];
+      break;
     default: return false;
   }
   apply();
@@ -109,12 +121,20 @@ bool OsupadCustomValue::set(uint8_t packet[via::kPacketSize]) {
 }
 
 bool OsupadCustomValue::get(uint8_t packet[via::kPacketSize]) {
-  if (packet[1] != 0x01 && packet[1] != 0x02) return false;
-  switch (packet[2]) {
-    case 0x01: packet[3] = rgb_.brightness; break;
-    case 0x02: packet[3] = rgb_.effect; break;
-    case 0x03: packet[3] = rgb_.speed; break;
-    case 0x04: packet[3] = rgb_.hue; packet[4] = rgb_.saturation; break;
+  const bool v3Form = packet[1] >= 0x80;
+  const uint8_t command = v3Form ? packet[1] : packet[2];
+  switch (command) {
+    case 0x80:
+    case 0x01: packet[v3Form ? 2 : 3] = rgb_.brightness; break;
+    case 0x81:
+    case 0x02: packet[v3Form ? 2 : 3] = rgb_.effect; break;
+    case 0x82:
+    case 0x03: packet[v3Form ? 2 : 3] = rgb_.speed; break;
+    case 0x83:
+    case 0x04:
+      packet[v3Form ? 2 : 3] = rgb_.hue;
+      packet[v3Form ? 3 : 4] = rgb_.saturation;
+      break;
     default: return false;
   }
   return true;
