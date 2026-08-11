@@ -96,7 +96,7 @@ void OsupadCustomValue::apply() {
 }
 
 bool OsupadCustomValue::set(uint8_t packet[via::kPacketSize]) {
-  if (packet[1] != 0x02) return false;
+  if (packet[1] != 0x01 && packet[1] != 0x02) return false;
   switch (packet[2]) {
     case 0x01: rgb_.brightness = packet[3]; break;
     case 0x02: rgb_.effect = packet[3]; break;
@@ -109,7 +109,7 @@ bool OsupadCustomValue::set(uint8_t packet[via::kPacketSize]) {
 }
 
 bool OsupadCustomValue::get(uint8_t packet[via::kPacketSize]) {
-  if (packet[1] != 0x02) return false;
+  if (packet[1] != 0x01 && packet[1] != 0x02) return false;
   switch (packet[2]) {
     case 0x01: packet[3] = rgb_.brightness; break;
     case 0x02: packet[3] = rgb_.effect; break;
