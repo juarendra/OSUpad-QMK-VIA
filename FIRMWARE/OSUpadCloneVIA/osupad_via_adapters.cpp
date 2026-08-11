@@ -264,9 +264,15 @@ bool OsupadStorage::commit() {
   provisionalSlot_ = oldSlot;
   // single valid slot: erase the previous active page so a boot can never
   // face two valid records with different content.
-  if (!flash_.erasePage(oldSlot)) {
-    activeValid_ = false;
-    return false;
+  // Workaround for High-Density 256KB clone chips where Page Size = 2KB:
+  // 0x7800 and 0x7C00 fall into the same 2KB page, so programRecord's erase
+  // already cleared oldSlot. Only erase oldSlot if it is not already empty.
+  uint32_t oldMagic = 0;
+  if (flash_.read(oldSlot, &oldMagic, 4) && oldMagic != 0xFFFFFFFFUL) {
+    if (!flash_.erasePage(oldSlot)) {
+      activeValid_ = false;
+      return false;
+    }
   }
   provisionalReady_ = false;
   activeValid_ = true;
