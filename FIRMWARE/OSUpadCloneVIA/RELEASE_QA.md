@@ -10,7 +10,7 @@
 - VIA protocol handled by `via::Protocol` from VIA-Arduino; storage is
   dual-page single-valid-slot with OSVP→VIAA migration.
 - VIA definition: validated as `KeyboardDefinitionV3`; VID `0x7877`, PID
-  `0x1004`, firmware version `1`, six matrix keys.
+  `0x1000`, firmware version `1`, six matrix keys.
 - USB topology: Windows enumerates keyboard interface `MI_00` and separate
   QMK Raw HID interface `MI_01` (vendor page `0xFF60`, usage `0x61`).
 - Flash operation: ST-Link program and verify at `0x08000000`; option bytes,

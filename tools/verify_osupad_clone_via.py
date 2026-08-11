@@ -37,7 +37,7 @@ def main() -> None:
 
     expected_definition = {
         "vendorId": "0x7877",
-        "productId": "0x1004",
+        "productId": "0x1000",
         "firmwareVersion": 1,
     }
     for key, value in expected_definition.items():
@@ -102,7 +102,7 @@ def main() -> None:
         require(storage_h, token, storage_path)
 
     print("OSUpad Clone VIA contract: PASS")
-    print("  VIA: 0x7877:0x1004, V3 definition, 2x3 matrix")
+    print("  VIA: 0x7877:0x1000, V3 definition, 2x3 matrix")
     print("  storage: application ends before 0x08007800; two 1 KiB settings pages")
     print("  Raw HID: vendor page 0xFF60, usage 0x61, 32-byte packets")
     print("  input: 8-button mouse, vertical/horizontal scroll, system controls")

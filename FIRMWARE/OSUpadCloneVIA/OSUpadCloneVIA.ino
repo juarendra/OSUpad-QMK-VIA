@@ -735,7 +735,7 @@ void setup() {
   }
 
   USBComposite.setVendorId(0x7877);
-  USBComposite.setProductId(0x1004);
+  USBComposite.setProductId(0x1000);
   USBComposite.setManufacturerString("OSUpad");
   USBComposite.setProductString("OSUpad Clone VIA");
   USBComposite.setSerialString("OSUPAD-C6-VIA");
