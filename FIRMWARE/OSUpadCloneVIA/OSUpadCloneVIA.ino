@@ -725,6 +725,7 @@ void setup() {
   pinMode(PA5, OUTPUT);
   digitalWrite(PA5, LOW);
   rgb_render();
+  storage.begin();           // NEW: scan flash slots before protocol load
   protocol.begin(millis());
 
   for (uint8_t i = 0; i < KEY_COUNT; ++i) {
