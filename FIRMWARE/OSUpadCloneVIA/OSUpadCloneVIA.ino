@@ -117,6 +117,7 @@ static const OsupadRgbState default_rgb = {48, 1, 80, 0, 255};
 static uint32_t last_rgb_frame = 0;
 static uint8_t last_rgb_effect = 1;
 static bool device_indication = false;
+static uint32_t device_indication_until = 0;
 
 static void ws2812_delay(uint8_t cycles) {
   while (cycles--) {
@@ -695,7 +696,8 @@ class OsupadCallbacks : public via::Callbacks {
            (stable_state[row * 3 + 2] ? 4 : 0);
   }
   void deviceIndication(uint8_t) override {
-    device_indication = !device_indication;
+    device_indication = true;
+    device_indication_until = millis() + 2000;
     rgb_render();
   }
 };
@@ -783,5 +785,10 @@ void loop() {
   if (local_dirty && (int32_t)(now - local_save_at) >= 0) {
     if (protocol.save()) local_dirty = false;
     else local_save_at = now + SETTINGS_RETRY_DELAY_MS;
+  }
+
+  if (device_indication && (int32_t)(now - device_indication_until) >= 0) {
+    device_indication = false;
+    rgb_render();
   }
 }
