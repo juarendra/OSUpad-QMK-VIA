@@ -35,8 +35,8 @@ atau bootloader.
 - [Flash ST-Link](FLASH_STLINK.md): prosedur program pada `0x08000000`.
 - [Release QA](RELEASE_QA.md): batas memori dan checklist produksi.
 
-Definisi belum masuk database VIA global. Di VIA, aktifkan **Show Design Tab**,
-muat `via-definition.json`, dan biarkan **Use V2 definitions (deprecated)**
+Definisi belum masuk database VIA global (namun PID `0x1000` telah disesuaikan agar cocok dengan firmware QMK aslinya). Di VIA, aktifkan **Show Design Tab**,
+muat `via-definition.json`, dan pastikan **Use V2 definitions (deprecated)**
 tetap nonaktif.
 
 Unicode, MIDI, audio, steno, tap dance, serta ekstensi QMK khusus keyboard tidak

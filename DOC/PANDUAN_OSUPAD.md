@@ -37,7 +37,7 @@ Panduan rinci tersedia di
 5. Klik **Authorize device**, pilih **OSUpad Clone VIA**, lalu buka
    **Configure**.
 
-JSON perlu dimuat karena OSUpad belum ada di database autodetect VIA. Setelah
+JSON mungkin perlu dimuat jika OSUpad belum otomatis terdeteksi (meskipun PID `0x1000` memungkinkan auto-detect jika *cache* definisi sudah ada di browser Anda). Setelah
 dimuat pada browser tersebut, keymap dapat diubah langsung dan disimpan di
 macropad.
 
