@@ -3,6 +3,14 @@
   "keyboard_name": "OSUpad",
   "maintainer": "juarendra",
   "url": "https://www.tokopedia.com/positronelectronic",
+  "development_board": "bluepill",
+  "diode_direction": "COL2ROW",
+  "matrix_pins": {
+    "direct": [
+      ["B0", "A7", "A6"],
+      ["B12", "B13", "B14"]
+    ]
+  },
   "usb": {
     "device_version": "1.0.0",
     "pid": "0x7050",
@@ -10,8 +18,6 @@
   },
   "features": {
     "bootmagic": true,
-    "command": false,
-    "console": false,
     "extrakey": true,
     "mousekey": true,
     "nkro": true,
@@ -29,19 +35,9 @@
       "rainbow_swirl": true,
       "rgb_test": true,
       "snake": true,
-      "static_gradient": true,
-      "twinkle": false
+      "static_gradient": true
     }
   },
-  "matrix_pins": {
-    "direct": [
-      ["B0", "A7", "A6"],
-      ["B12", "B13", "B14"]
-    ]
-  },
-  "processor": "STM32F103",
-  "bootloader": "stm32duino",
-  "diode_direction": "COL2ROW",
   "ws2812": {
     "pin": "A5"
   },
@@ -58,4 +54,3 @@
     }
   }
 }
-
