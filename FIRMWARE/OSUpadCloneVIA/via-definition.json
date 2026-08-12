@@ -1,7 +1,7 @@
 {
   "name": "OSUpad Clone VIA",
-  "vendorId": "0xD010",
-  "productId": "0x1006",
+  "vendorId": "0x1209",
+  "productId": "0x7050",
   "firmwareVersion": 1,
   "matrix": {
     "rows": 2,
@@ -17,3 +17,4 @@
     ]
   }
 }
+

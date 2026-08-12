@@ -9,8 +9,8 @@
   final two 1 KiB settings pages.
 - VIA protocol handled by `via::Protocol` from VIA-Arduino; storage is
   dual-page single-valid-slot with OSVP→VIAA migration.
-- VIA definition: validated as `KeyboardDefinitionV3`; VID `0xD010`, PID
-  `0x1006`, firmware version `1`, six matrix keys.
+- VIA definition: validated as `KeyboardDefinitionV3`; VID `0x1209`, PID
+  `0x7050`, firmware version `1`, six matrix keys.
 - USB topology: Windows enumerates keyboard interface `MI_00` and separate
   QMK Raw HID interface `MI_01` (vendor page `0xFF60`, usage `0x61`).
 - Flash operation: ST-Link program and verify at `0x08000000`; option bytes,
@@ -64,3 +64,4 @@ Run this on each hardware revision before release:
 - The reserved settings pages assume the C6-compatible 32 KiB application
   layout. Keep release firmware below `0x08007800`; the current build leaves
   about 9 KiB of headroom before that boundary.
+

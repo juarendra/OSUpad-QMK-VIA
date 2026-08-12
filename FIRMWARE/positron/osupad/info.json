@@ -5,8 +5,8 @@
   "url": "https://www.tokopedia.com/positronelectronic",
   "usb": {
     "device_version": "1.0.0",
-    "pid": "0x1006",
-    "vid": "0xD010"
+    "pid": "0x7050",
+    "vid": "0x1209"
   },
   "features": {
     "bootmagic": true,
@@ -58,3 +58,4 @@
     }
   }
 }
+
