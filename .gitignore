@@ -8,3 +8,6 @@
 
 # Release binaries are published as GitHub Release assets, not committed.
 FIRMWARE/OSUpadCloneVIA/*.bin
+
+# Local build output
+build/

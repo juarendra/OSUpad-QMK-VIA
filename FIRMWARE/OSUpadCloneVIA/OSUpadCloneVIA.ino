@@ -112,8 +112,8 @@ static const uint16_t default_keymap[LAYER_COUNT * KEY_COUNT] = {
 };
 static uint8_t macro_buffer[MACRO_BYTES];
 
-static OsupadRgbState rgb = {48, 1, 80, 0, 255};
-static const OsupadRgbState default_rgb = {48, 1, 80, 0, 255};
+static OsupadRgbState rgb = {120, 1, 80, 0, 255};
+static const OsupadRgbState default_rgb = {120, 1, 80, 0, 255};
 static uint32_t last_rgb_frame = 0;
 static uint8_t last_rgb_effect = 1;
 static bool device_indication = false;
@@ -125,20 +125,24 @@ static void ws2812_delay(uint8_t cycles) {
   }
 }
 
-/* PA5 is the actual RGB DIN on this PCB. The short critical section keeps
- * WS2812 timing stable without touching the USB peripheral configuration. */
+/* WS2812B 800 kHz bit-bang timing at 72 MHz.  Each loop iteration costs
+ * roughly 3-4 core cycles (~42-56 ns).  Spec windows:
+ *   bit 1 high 0.55-0.85 us, low 0.45-0.70 us
+ *   bit 0 high 0.20-0.50 us, low 0.75-1.00 us
+ * Old 22/8 produced a ~0.9+ us bit-1 HIGH (over the 0.85 us max), so LEDs
+ * misread every bit as 1 and rendered solid white. */
 static void ws2812_write_byte(uint8_t value) {
   const uint32_t pin = 1U << 5;
   for (uint8_t bit = 0; bit < 8; ++bit) {
     GPIOA->regs->BSRR = pin;
     if (value & 0x80) {
-      ws2812_delay(22);
+      ws2812_delay(14);
       GPIOA->regs->BRR = pin;
-      ws2812_delay(8);
+      ws2812_delay(11);
     } else {
-      ws2812_delay(8);
+      ws2812_delay(6);
       GPIOA->regs->BRR = pin;
-      ws2812_delay(22);
+      ws2812_delay(16);
     }
     value <<= 1;
   }
@@ -695,9 +699,9 @@ class OsupadCallbacks : public via::Callbacks {
            (stable_state[row * 3 + 1] ? 2 : 0) |
            (stable_state[row * 3 + 2] ? 4 : 0);
   }
-  void deviceIndication(uint8_t) override {
-    device_indication = true;
-    device_indication_until = millis() + 2000;
+  void deviceIndication(uint8_t value) override {
+    device_indication = value != 0;
+    if (value != 0) device_indication_until = millis() + 2000;
     rgb_render();
   }
 };
