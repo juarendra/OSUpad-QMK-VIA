@@ -140,6 +140,16 @@ bool OsupadCustomValue::get(uint8_t packet[via::kPacketSize]) {
   return true;
 }
 
+void OsupadCustomValue::reset() {
+  rgb_.brightness = 255;
+  rgb_.effect = 1;
+  rgb_.speed = 80;
+  rgb_.hue = 0;
+  rgb_.saturation = 255;
+  defaultLayer_ = 0;
+  apply();
+}
+
 bool OsupadCustomValue::saveState(uint8_t* output, size_t length) const {
   if (length != kCustomBytes) return false;
   output[0] = rgb_.brightness;

@@ -40,6 +40,7 @@ class OsupadCustomValue : public via::CustomValue {
                     void (*onApply)() = nullptr);
   bool set(uint8_t packet[via::kPacketSize]) override;
   bool get(uint8_t packet[via::kPacketSize]) override;
+  void reset() override;
   size_t stateSize() const override { return kCustomBytes; }
   bool saveState(uint8_t* output, size_t length) const override;
   bool loadState(const uint8_t* input, size_t length) override;

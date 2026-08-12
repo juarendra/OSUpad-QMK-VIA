@@ -119,31 +119,39 @@ static uint8_t last_rgb_effect = 1;
 static bool device_indication = false;
 static uint32_t device_indication_until = 0;
 
-static void ws2812_delay(uint8_t cycles) {
-  while (cycles--) {
-    __asm__ volatile("nop");
-  }
+/* WS2812 timing must run at exactly 72 MHz.  A different clock changes
+ * every pulse width and the LEDs will read garbage. */
+#ifndef F_CPU
+#error "F_CPU not defined"
+#endif
+static_assert(F_CPU == 72000000L, "WS2812 timing requires 72 MHz");
+
+/* Cortex-M3 DWT cycle counter — deterministic, no function-call overhead. */
+#define _DWT_CTRL   (*(volatile uint32_t *)0xE0001000UL)
+#define _DWT_CYCCNT (*(volatile uint32_t *)0xE0001004UL)
+#define _DEMCR      (*(volatile uint32_t *)0xE000EDFCUL)
+#define _DEMCR_TRCENA (1UL << 24)
+
+static void ws2812_begin() {
+  _DEMCR |= _DEMCR_TRCENA;
+  _DWT_CYCCNT = 0;
+  _DWT_CTRL |= 1UL;
 }
 
-/* WS2812B 800 kHz bit-bang timing at 72 MHz.  Each loop iteration costs
- * roughly 3-4 core cycles (~42-56 ns).  Spec windows:
- *   bit 1 high 0.55-0.85 us, low 0.45-0.70 us
- *   bit 0 high 0.20-0.50 us, low 0.75-1.00 us
- * Old 22/8 produced a ~0.9+ us bit-1 HIGH (over the 0.85 us max), so LEDs
- * misread every bit as 1 and rendered solid white. */
+/* WS2812B 800 kHz bit-bang timing at 72 MHz using DWT cycle deadline.
+ * Bit period = 83 cycles (~1.15 us)
+ * T0H = 17 cycles (~0.23 us), T1H = 41 cycles (~0.57 us)
+ * These tight deadlines offset the memory-read overhead of the loop.
+ * Interrupts disabled around each full LED frame. */
 static void ws2812_write_byte(uint8_t value) {
-  const uint32_t pin = 1U << 5;
+  const uint32_t bsr = (1UL << 5);
   for (uint8_t bit = 0; bit < 8; ++bit) {
-    GPIOA->regs->BSRR = pin;
-    if (value & 0x80) {
-      ws2812_delay(14);
-      GPIOA->regs->BRR = pin;
-      ws2812_delay(11);
-    } else {
-      ws2812_delay(6);
-      GPIOA->regs->BRR = pin;
-      ws2812_delay(16);
-    }
+    const uint32_t start = _DWT_CYCCNT;
+    GPIOA->regs->BSRR = bsr;
+    const uint32_t highCycles = (value & 0x80) ? 41U : 17U;
+    while ((_DWT_CYCCNT - start) < highCycles) {}
+    GPIOA->regs->BRR = bsr;
+    while ((_DWT_CYCCNT - start) < 83U) {}
     value <<= 1;
   }
 }
@@ -182,7 +190,11 @@ static void rgb_render() {
     value = ((uint16_t)value * wave) >> 8;
   }
   if ((effect >= 6 && effect <= 14) || effect == 35) base_hue += frame;
-  noInterrupts();
+
+  // Pre-calculate all colors into a buffer.
+  // WS2812 resets if the data line stays low for > 50us (or even > 6us on some clones).
+  // Calculating HSV to RGB between LED writes causes unintended resets (glitches/LED 0 overlap).
+  uint8_t grb_buffer[RGB_LED_COUNT * 3];
   for (uint8_t led = 0; led < RGB_LED_COUNT; ++led) {
     uint8_t r, g, b;
     uint8_t hue = base_hue;
@@ -214,9 +226,16 @@ static void rgb_render() {
     }
     if (device_indication) hsv_to_rgb(0, 0, 96, &r, &g, &b);
     else hsv_to_rgb(hue, rgb.saturation, led_value, &r, &g, &b);
-    ws2812_write_byte(g);
-    ws2812_write_byte(r);
-    ws2812_write_byte(b);
+    
+    grb_buffer[led * 3 + 0] = g;
+    grb_buffer[led * 3 + 1] = r;
+    grb_buffer[led * 3 + 2] = b;
+  }
+
+  // Blast out the pre-calculated bytes with tight timing.
+  noInterrupts();
+  for (uint8_t i = 0; i < RGB_LED_COUNT * 3; ++i) {
+    ws2812_write_byte(grb_buffer[i]);
   }
   interrupts();
   delayMicroseconds(80);
@@ -730,6 +749,7 @@ via::Protocol protocol(protocolConfig, transport, &storage, &customValue, &callb
 void setup() {
   pinMode(PA5, OUTPUT);
   digitalWrite(PA5, LOW);
+  ws2812_begin();
   rgb_render();
   storage.begin();           // NEW: scan flash slots before protocol load
   protocol.begin(millis());

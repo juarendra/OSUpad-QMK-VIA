@@ -64,6 +64,10 @@ jobs:
           # The two final 1 KiB C6 pages are settings storage.  The binary
           # must never occupy them, even if a clone advertises more flash.
           test "$(stat -c%s build/OSUpadCloneVIA.ino.bin)" -le 30720
+          
+          # Verify DWT fixed-cycle timing: no external delay calls in transmitter
+          arm-none-eabi-objdump -d build/OSUpadCloneVIA.ino.elf | grep -E "bl +[0-9a-f]+ <ws2812_delay" && exit 1 || exit 0
+          
           sha256sum build/OSUpadCloneVIA.ino.bin FIRMWARE/OSUpadCloneVIA/via-definition.json \
             > build/SHA256SUMS.txt
 
