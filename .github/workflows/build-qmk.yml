@@ -3,11 +3,11 @@ name: Build QMK Firmware
 on:
   push:
     paths:
-      - 'FIRMWARE/handwired/positron/osupad/**'
+      - 'FIRMWARE/positron/osupad/**'
       - '.github/workflows/build-qmk.yml'
   pull_request:
     paths:
-      - 'FIRMWARE/handwired/positron/osupad/**'
+      - 'FIRMWARE/positron/osupad/**'
   workflow_dispatch:
 
 jobs:
@@ -22,17 +22,17 @@ jobs:
 
       - name: Copy OSUpad to QMK Firmware
         run: |
-          mkdir -p qmk_firmware/keyboards/handwired/positron/osupad
-          cp -r FIRMWARE/handwired/positron/osupad/* qmk_firmware/keyboards/handwired/positron/osupad/
+          mkdir -p qmk_firmware/keyboards/positron/osupad
+          cp -r FIRMWARE/positron/osupad/* qmk_firmware/keyboards/positron/osupad/
 
       - name: Compile OSUpad VIA Keymap
         run: |
           cd qmk_firmware
-          qmk compile -kb handwired/positron/osupad -km via
+          qmk compile -kb positron/osupad -km via
 
       - name: Upload QMK Firmware Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: handwired_positron_osupad_via.bin
-          path: qmk_firmware/.build/handwired_positron_osupad_via.bin
+          name: positron_osupad_via.bin
+          path: qmk_firmware/.build/positron_osupad_via.bin
           if-no-files-found: error
