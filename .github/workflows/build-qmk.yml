@@ -1,0 +1,38 @@
+name: Build QMK Firmware
+
+on:
+  push:
+    paths:
+      - 'FIRMWARE/handwired/positron/osupad/**'
+      - '.github/workflows/build-qmk.yml'
+  pull_request:
+    paths:
+      - 'FIRMWARE/handwired/positron/osupad/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup QMK
+        uses: qmk/setup-qmk@v1
+
+      - name: Copy OSUpad to QMK Firmware
+        run: |
+          mkdir -p qmk_firmware/keyboards/handwired/positron/osupad
+          cp -r FIRMWARE/handwired/positron/osupad/* qmk_firmware/keyboards/handwired/positron/osupad/
+
+      - name: Compile OSUpad VIA Keymap
+        run: |
+          cd qmk_firmware
+          qmk compile -kb handwired/positron/osupad -km via
+
+      - name: Upload QMK Firmware Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: handwired_positron_osupad_via.bin
+          path: qmk_firmware/.build/handwired_positron_osupad_via.bin
+          if-no-files-found: error
