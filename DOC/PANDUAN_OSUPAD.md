@@ -14,7 +14,8 @@ ini; gunakan ST-Link untuk semua proses flash dan recovery.
 - ST-Link untuk flash atau recovery.
 - Chrome atau Edge untuk [VIA Web](https://usevia.app).
 - File `OSUpadCloneVIA.ino.bin` dan `via-definition.json` dari
-  [halaman Releases](https://github.com/juarendra/OSUpad-QMK-VIA/releases/latest).
+  [folder FIRMWARE di GitHub](https://github.com/juarendra/OSUpad-QMK-VIA/tree/main/FIRMWARE)
+  atau [definisi VIA langsung](https://github.com/juarendra/OSUpad-QMK-VIA/blob/main/via-definition.json).
 
 ## 2. Flash firmware
 
@@ -31,15 +32,24 @@ Panduan rinci tersedia di
 ## 3. Hubungkan dengan VIA
 
 1. Buka [usevia.app](https://usevia.app).
-2. Di **Settings**, aktifkan **Show Design Tab**.
-3. Di **Design**, pilih **Load** dan buka `via-definition.json`.
+2. Jika OSUpad tidak terdeteksi otomatis, masuk ke **Settings** dan aktifkan
+   **Show Design Tab**.
+3. Buka tab **Design**, pilih **Load**, lalu unggah file
+   [`via-definition.json`](https://github.com/juarendra/OSUpad-QMK-VIA/blob/main/via-definition.json).
+   Alternatif: gunakan [Raw JSON](https://raw.githubusercontent.com/juarendra/OSUpad-QMK-VIA/main/via-definition.json).
 4. Pastikan opsi **Use V2 definitions (deprecated)** tidak aktif.
 5. Klik **Authorize device**, pilih **OSUpad Clone VIA**, lalu buka
    **Configure**.
+6. Jika masih muncul **searching**, cabut-colok USB lalu ulangi dari langkah 2.
 
-JSON mungkin perlu dimuat jika OSUpad belum otomatis terdeteksi (meskipun PID `0x1000` memungkinkan auto-detect jika *cache* definisi sudah ada di browser Anda). Setelah
-dimuat pada browser tersebut, keymap dapat diubah langsung dan disimpan di
-macropad.
+![Contoh tab Design VIA untuk memuat definisi JSON](HARDWARE/via-load-definition.jpeg)
+
+*Contoh tampilan VIA dari tutorial Lianumpad: klik **Load**, pilih JSON, dan
+biarkan **Use V2 definitions (deprecated)** nonaktif. Lihat juga
+[video tutorial](https://github.com/juarendra/Lianumpad-QMK-VIA/blob/main/DOC/VIA/lia_numpad.mp4).*
+
+Setelah definisi dimuat, VIA biasanya mengingatnya di browser tersebut. Ulangi
+proses ini setelah cache browser dihapus atau firmware berganti definisi.
 
 ## 4. Keymap dan layer
 
