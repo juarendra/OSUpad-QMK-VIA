@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Update (QMK):** Modernized Positron metadata to current QMK formatting and removed the obsolete `rgb_test` animation entry.
+- **Update (QMK):** Default keymap now maps keys 4/6 to `KC_Z`/`KC_X` for osu!, keys 1/2/3 to volume down/mute/up, and leaves key 5 unused; build docs and CI now target the existing `default` keymap.
+
 ## v1.1.4-clone-via — 2026-08-12
 
 - **Fix (RGB):** Perbaikan format penerimaan Custom Value VIA v3 (`0x80`–`0x83`). Semua opsi di tab Lighting VIA (mode, warna, brightness, speed, off) sekarang berfungsi normal pada VIA v3 web.

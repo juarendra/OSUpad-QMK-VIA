@@ -108,6 +108,7 @@ CI instead copies `FIRMWARE/positron/osupad/*` into `qmk_firmware/keyboards/posi
 - `tools/verify_osupad_clone_via.py` — dependency-free firmware/JSON contract validation.
 - `.github/workflows/build-osupad-clone-via.yml` — Arduino toolchain setup, contract check, size/timing guard, artifact upload, and port-test loop.
 - `.github/workflows/build-qmk.yml` — QMK setup, source copy, compile, and artifact upload.
+- `CHANGELOG.md` — release history; update it for firmware behavior or release changes.
 
 ## Runtime/Tooling Preferences
 

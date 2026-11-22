@@ -6,7 +6,7 @@
 *.map
 *.hex
 
-# Release binaries are published as GitHub Release assets, not committed.
+# Clone build binaries inside the source folder are ignored; published copies in `FIRMWARE/` are tracked.
 FIRMWARE/OSUpadCloneVIA/*.bin
 
 # Local build output

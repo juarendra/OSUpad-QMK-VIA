@@ -9,8 +9,10 @@ flash menggunakan ST-Link pada alamat `0x08000000`.
 
 | Berkas | Fungsi |
 | --- | --- |
-| `OSUpadCloneVIA.ino.bin` | Firmware rilis untuk clone; tersedia sebagai asset GitHub Release. |
-| `via-definition.json` | Definisi VIA V3; muat dari tab Design. |
+| `OSUpadCloneVIA.ino.bin` | Binary clone VIA yang dipublikasikan di folder `FIRMWARE`. |
+| `positron_osupad_default.bin` | Binary QMK osu! untuk STM32 asli; jangan gunakan pada clone. |
+| `OSUpadCloneVIA/via-definition.json` | Definisi VIA V3 kanonis untuk source dan CI. |
+| `../via-definition.json` | Salinan praktis definisi VIA di root repository. |
 | `FLASH_STLINK.md` | Flash, update, dan recovery tanpa mengubah BOOT/RDP. |
 | `RELEASE_QA.md` | Validasi teknis dan checklist produksi. |
 

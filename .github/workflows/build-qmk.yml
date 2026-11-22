@@ -25,14 +25,14 @@ jobs:
           mkdir -p qmk_firmware/keyboards/positron/osupad
           cp -r FIRMWARE/positron/osupad/* qmk_firmware/keyboards/positron/osupad/
 
-      - name: Compile OSUpad VIA Keymap
+      - name: Compile OSUpad default keymap
         run: |
           cd qmk_firmware
-          qmk compile -kb positron/osupad -km via
+          qmk compile -kb positron/osupad -km default
 
       - name: Upload QMK Firmware Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: positron_osupad_via.bin
-          path: qmk_firmware/.build/positron_osupad_via.bin
+          name: positron_osupad_default.bin
+          path: qmk_firmware/.build/positron_osupad_default.bin
           if-no-files-found: error
